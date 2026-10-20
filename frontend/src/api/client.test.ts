@@ -2,9 +2,9 @@ import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
-import { server } from '@/test/server'
+import { CSRF_TOKEN, issueCsrfCookie, problem, server } from '@/test/server'
 
-import { ApiError, apiRequest } from './client'
+import { ApiError, apiRequest, noContent } from './client'
 
 const itemSchema = z.object({ id: z.number(), name: z.string() })
 
@@ -77,6 +77,52 @@ describe('apiRequest', () => {
 
     expect(error.code).toBe('NETWORK_ERROR')
     expect(error.status).toBe(502)
+  })
+
+  it('fetches a CSRF token first and sends it on state-changing requests', async () => {
+    const seen: (string | null)[] = []
+    server.use(
+      http.post('/api/v1/items', ({ request }) => {
+        seen.push(request.headers.get('X-XSRF-TOKEN'))
+        return HttpResponse.json({ id: 1, name: 'created' }, { status: 201 })
+      }),
+    )
+
+    await apiRequest('/api/v1/items', itemSchema, { method: 'POST', body: { name: 'created' } })
+
+    expect(seen).toEqual([CSRF_TOKEN])
+  })
+
+  it('does not send the CSRF header on GET requests', async () => {
+    issueCsrfCookie()
+    let header: string | null = 'unset'
+    server.use(
+      http.get('/api/v1/items/1', ({ request }) => {
+        header = request.headers.get('X-XSRF-TOKEN')
+        return HttpResponse.json({ id: 1, name: 'pet' })
+      }),
+    )
+
+    await apiRequest('/api/v1/items/1', itemSchema)
+
+    expect(header).toBeNull()
+  })
+
+  it('refreshes the token and retries once when the server rejects it', async () => {
+    document.cookie = 'XSRF-TOKEN=stale-token; path=/'
+    const seen: (string | null)[] = []
+    server.use(
+      http.delete('/api/v1/items/1', ({ request }) => {
+        const token = request.headers.get('X-XSRF-TOKEN')
+        seen.push(token)
+        return token === CSRF_TOKEN
+          ? new HttpResponse(null, { status: 204 })
+          : problem(403, 'CSRF_INVALID', 'Missing or invalid CSRF token.')
+      }),
+    )
+
+    await expect(apiRequest('/api/v1/items/1', noContent, { method: 'DELETE' })).resolves.toBeUndefined()
+    expect(seen).toEqual(['stale-token', CSRF_TOKEN])
   })
 
   it('parses the body of explicitly accepted non-2xx statuses', async () => {

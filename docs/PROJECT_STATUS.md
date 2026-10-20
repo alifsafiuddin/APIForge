@@ -1,137 +1,118 @@
 # Project Status
 
-**Current phase**: Phase 1 — runnable project foundation — **complete** (2026-10-21)
-**Next phase**: Phase 2 — authentication, projects, and OpenAPI import/explorer
-**Runnable today**: backend (Spring Boot 4.1.1) + PostgreSQL 18.6 (Docker Compose) + frontend shell (React 19 / Vite 8). No API-testing features exist yet.
+**Current phase**: Phase 2 — database design and authentication — **complete** (2026-10-21)
+**Next phase**: Phase 3 — OpenAPI specification import and explorer (tentative; the next phase brief decides)
+**Runnable today**: registration and sign-in, private project management, read-only execution history API, complete persistence model. Not yet: specification import, test generation and execution, contract validation, coverage, AI.
 
-## Phase 1 summary
+## Phase 2 summary
 
 ### Delivered
 
 | Area | What exists | Where |
 |---|---|---|
-| Backend scaffold | Spring Boot 4.1.1, Java 21, Maven Wrapper (Maven 3.10.0), packages `common`, `config`, `system` | `backend/` |
-| Build quality | `-Xlint:all` with warnings as errors (except `processing`, ADR-022), enforcer (Java 21+, Maven 3.9+, dependency convergence, no duplicate deps), JaCoCo report, Mockito loaded as an agent | `backend/pom.xml` |
-| Database | PostgreSQL 18.6 via Compose (loopback-only port, healthcheck, named volume); Flyway `V1__enable_extensions.sql` (`citext`); Hibernate `ddl-auto=validate` | `docker-compose.yml`, `db/migration/` |
-| Configuration | `application.yml` (env-driven, production-safe defaults), `dev` profile (reads root `.env`, CORS for :5173, DEBUG logging), `prod` profile (required DB vars without defaults, ECS JSON logs); validated `apiforge.*` properties | `backend/src/main/resources/` |
-| Health | Actuator `health` (components visible, details hidden), `liveness` (process only), `readiness` (+db); only `health` and `info` exposed | `application.yml` |
-| Errors | RFC 9457 problem+json with `code`, `requestId`, `errors[]` for MVC exceptions **and** container-level errors | `common/error/` |
-| Correlation & logging | `X-Request-Id` filter (safe reuse or UUID), MDC `requestId` on every log line, one access-log line per request without query, headers or bodies | `common/web/RequestCorrelationFilter.java` |
-| CORS | `/api/**` only, explicit origins (wildcards fail startup), credentials allowed, `X-Request-Id` exposed | `config/WebConfig.java` |
-| API | `GET /api/v1/system/info` | `system/` |
-| Frontend | Vite 8 + React 19 + TS 6.0 (strict, `noUncheckedIndexedAccess`) + Tailwind 4 + shadcn/ui (radix-nova) + React Router 8 + TanStack Query + zod; responsive shell (sidebar, mobile drawer, skip link), Overview with **live** system status, 404 and error pages; typed API client that validates every response and parses problem+json | `frontend/src/` |
-| Dev scripts | Backend `./mvnw spring-boot:run` / `verify`; frontend `dev`, `build`, `preview`, `lint`, `typecheck`, `test`, `test:coverage`, `check`; Vite proxy for `/api` and `/actuator` | `package.json`, `vite.config.ts` |
-| Repo hygiene | `.gitignore` (secrets, build output, deps, local env), `.gitattributes` (LF; CRLF for `.cmd`), `.editorconfig`, `.env.example` files with placeholders only | root, `frontend/` |
-| CI | GitHub Actions (pinned SHAs, read-only token): backend verify with Testcontainers, frontend lint/typecheck/test/build/audit, Compose smoke test. Dependabot for Maven, npm, Actions, Compose | `.github/` |
+| Schema | Migrations V2–V6: `users`, `audit_events`, `api_projects`, `specification_versions`, `environments`, `environment_variables`, `test_suites`, `test_cases`, `test_runs`, `test_results`. UUIDv7 ids, explicit FKs with deliberate delete rules, indexes, timestamps, check constraints, composite same-project FKs, append-only triggers | `db/migration/`, [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) |
+| Entities | JPA entities and repositories for every table (`ddl-auto=validate` checks them against the schema on every start) | `*/domain`, `*/repository` |
+| Authentication | Registration, JSON login, logout, `/auth/me`; bcrypt (cost 12) via `DelegatingPasswordEncoder`; NIST-style password policy; server-side sessions (30 min idle, 12 h absolute); session-id and CSRF-token rotation on login; SPA CSRF protection; uniform failure responses; account lockout; per-IP rate limits; registration switch | `auth/`, `config/SecurityConfig` |
+| Authorization | API level (authenticated by default, explicit public allow-list); service level (`ProjectAccessService.requireOwned`, parent-scoped child lookups); 404 for foreign resources; database-level same-project FKs; ArchUnit rules | `project/service`, `execution/service`, `ArchitectureTest` |
+| Audit | Security event trail (registration, sign-ins, failures, lockouts, logout, project create/delete, cross-user attempts) with IP and request id; append-only | `audit/` |
+| APIs | Auth endpoints; projects CRUD with search, sort allow-list, pagination (capped at 100), optimistic locking; read-only runs/results history | [API_DESIGN.md](API_DESIGN.md) |
+| Errors | Centralized handling extended: `ApiException` codes, optimistic lock → `STALE_VERSION`, integrity → `CONFLICT` (no constraint names leaked), security exceptions → 401/403 problem+json from filters and controllers | `common/error/` |
+| Frontend | Login and registration pages (client validation mirroring server rules, server field errors), route guard with safe `next` redirect, global 401 handling, user menu with sign-out, Projects page (search, sort, active/archived, paging, create/edit/archive/delete with typed confirmation), recent projects on the Overview, CSRF-aware API client with one automatic retry on token rotation | `frontend/src/features/{auth,projects}` |
 
-**Not done in Phase 1 (deliberately)**: authentication and Spring Security move to Phase 2 (ADR-022). ArchUnit rules start in Phase 2, when there are layered modules to check. Backend and frontend Dockerfiles arrive in Phase 8.
+**Deliberately not built in Phase 2**: `coverage_snapshots` (optional in the brief; coverage is derived, ADR-013). Environment, test-suite and test-case APIs (their tables and entities exist; the endpoints arrive with the phases that add their safety controls: SSRF policy and secret encryption, review gate). Account settings (password change, display name).
 
-### Verification (all commands actually executed on 2026-10-20/21, Windows 11, Docker Desktop 29.9.1, Node 24.22.0, JDK 21.0.8)
+### Verification (all executed on 2026-10-21; Windows 11, Docker Desktop 29.9.1, Node 24.22.0, JDK 21.0.8)
 
-| Check | Command / method | Result |
+| Check | Method | Result |
 |---|---|---|
-| Backend compiles | `./mvnw verify` (warnings are errors) | ✅ BUILD SUCCESS |
-| Backend tests | same | ✅ **44 run, 0 failures, 0 errors, 0 skipped**. Line coverage 96.4% (161/167), branch 81.5% (44/54) |
-| Frontend lint / typecheck / tests | `npm run check` | ✅ 0 lint findings; tsc clean; **13/13 tests passed** |
-| Frontend coverage | `npm run test:coverage` | Statements/lines 87.3%, branches 75.5%, functions 83.0% |
-| Frontend builds | `npm run build` | ✅ No warnings; largest chunk 219 kB (react) |
-| PostgreSQL starts | `docker compose up -d --wait postgres` | ✅ healthy, bound to `127.0.0.1:5432` |
-| Flyway migrations execute | backend startup log against Compose DB | ✅ "Successfully applied 1 migration … now at version v1"; second start: "Schema is up to date" (data persisted) |
-| Health checks are accurate | `curl` with DB up, then `docker compose stop postgres` | ✅ UP/200 with DB up; with DB stopped: `/health` and `/readiness` **DOWN/503** (db DOWN), `/liveness` UP/200; back to UP after restart |
-| Frontend calls backend | `curl` through the Vite proxy, and headless Microsoft Edge (Playwright, desktop 1440×900 and mobile 390×844) | ✅ `/api/v1/system/info` and `/actuator/health` 200 via proxy; page renders live status; no console errors; no horizontal scroll; mobile drawer opens and closes on navigation; unknown route shows 404 |
-| CORS | `curl` preflight | ✅ `http://localhost:5173` allowed with credentials; `https://evil.example` 403 |
-| No secrets committed | staged-file review + `git grep` for the real local password, key patterns, `password=` literals | ✅ `.env` ignored; only placeholders and the CI-only throwaway password `ci-only-password` |
-| Clean checkout | `git checkout-index` of the staged tree into an empty directory, then backend `mvnw verify`, frontend `npm ci && npm run check && npm run build`, `docker compose config` | ✅ Final staged tree: backend 44/44 tests, BUILD SUCCESS; `npm ci`, `check` (13/13) and `build` (0 warnings) passed; `docker compose config` valid. Without `APIFORGE_DB_PASSWORD`, Compose fails with a clear message, as intended |
+| Backend build and tests | `./mvnw verify` (warnings are errors, enforcer, JaCoCo) | ✅ **129 tests, 0 failures, 0 errors, 0 skipped**. Line coverage 90.5% (900/995), branch 76.6% (190/248) |
+| Frontend lint / typecheck / tests | `npm run check` | ✅ 0 lint findings (no suppressions), tsc clean, **51/51 tests** |
+| Frontend coverage | `vitest --coverage` | Lines 89.8%, branches 81.2%, functions 84.7% |
+| Frontend build | `npm run build` | ✅ no warnings; largest chunk 221 kB |
+| Dependency audit | `npm audit` | ✅ 0 vulnerabilities (after removing the shadcn CLI dependency, ADR-023) |
+| Registration | ITs + headless Edge against the real stack | ✅ account created, signed in, only `{bcrypt}$2a$12…` stored (checked in the dev DB), no plaintext anywhere |
+| Login / invalid credentials | ITs + browser | ✅ success starts a rotated session; unknown e-mail and wrong password give identical 401s; lockout after 5 failures |
+| Unauthorized access | ITs | ✅ every protected endpoint and unknown path → 401 problem+json; no CSRF token → 403 with no side effect |
+| Cross-user access | `CrossUserAccessIntegrationTest` + browser (second user probing the first user's project id) | ✅ 404 everywhere, indistinguishable from a missing project, owner data unchanged, attempt audited (`CROSS_USER_ACCESS_DENIED` row in the dev DB) |
+| Validation failures | ITs (backend) + component tests (frontend) | ✅ per-field `errors[]`, unknown properties rejected, sort allow-list, UI shows server field errors next to fields |
+| Persistence | `SchemaIntegrationTest`, `ProjectIntegrationTest`, browser sign-out/sign-in | ✅ round trips incl. jsonb; cascades and SET NULL rules as documented; data survives sign-out and backend restart |
+| Database migrations | Fresh DB (Testcontainers) and incremental upgrade of the Phase 1 dev DB (V1 → V6) | ✅ both; `flyway_schema_history` shows V1–V6 successful |
+| Real app security config | Backend log in `dev` | ✅ no generated default password (custom user store in use) |
+| Clean checkout | `git checkout-index` of the staged tree into an empty directory; `mvnw verify`, `npm ci && npm run check && npm run build` | ✅ see final line of this section |
 
-### Known limitations and notes
+Clean checkout (final staged tree): ✅ backend 129/129 tests, BUILD SUCCESS; `npm ci` (0 vulnerabilities), `npm run check` 51/51, `npm run build` with 0 warnings.
 
-- **CI has not run on GitHub yet**: the repository has no remote. The workflow was written to mirror the commands verified locally.
-- Maven prints two `HTTP 401` warnings while resolving prefix metadata for repositories declared in Flyway's own POM (Redgate feeds). Resolution is unaffected, and these come from a third-party POM, not our configuration.
-- Hibernate starts with no entities yet; `ddl-auto=validate` becomes meaningful from Phase 2.
-- The local editor session needed a restart after the Docker Desktop and Node 24 installs. The user `PATH` still contains Laragon's Node 18 after `D:\nodejs` (see the README troubleshooting section).
+### Defects found and fixed during this phase
+
+- **Self-deadlock in audit writes** (design review, before any run): audit events written in a new transaction would wait on the uncommitted user row during registration. Audits now join the caller's transaction; only rollback-surviving events use their own (ADR-023).
+- **Ownership check ordering**: renaming a project then checking for duplicates triggered an auto-flush into the unique index (generic 409 instead of `DUPLICATE_NAME`). The target state is now validated before mutating.
+- **Test fixture violated `ck_test_runs_timeline`**: the constraint correctly caught a run "started" before it was created; the fixture now persists first.
+- **Module cycle** (`audit` ↔ `auth`) found by the new ArchUnit rule; the logout listener moved to `auth`.
+- **Supply-chain advisory** in the shadcn CLI tree (unpatched `braces`); the CLI is no longer a dependency.
+
+### Known limitations
+
+- Sessions and rate-limit counters are in memory: single backend instance, and a restart signs users out (ADR-008/014).
+- GitHub CI has not run yet (no remote configured).
+- Maven still prints two `HTTP 401` warnings for repositories declared in Flyway's own POM (third-party, harmless).
+
+## Phase 1 summary (2026-10-21)
+
+Runnable foundation: Spring Boot 4.1.1 backend, PostgreSQL 18.6 via Compose, Flyway, Actuator health (accurate DOWN/503 when the DB stops), problem+json errors, request correlation, CORS, React shell with live status, CI workflow. 44 backend and 13 frontend tests at the time; verified from a clean checkout. Committed as `fbbd96f`.
 
 ## Phase 0 summary (2026-10-20)
 
-Design documents written; dependency compatibility verified ([DECISIONS.md](DECISIONS.md)); no code. Review outcomes are preserved in the ADRs.
+Design documents and verified dependency matrix; no code.
 
 ## Open risks carried forward
 
-1. **openapi-request-validator message mapping** (JSON path, expected and actual values): spike in Phase 4, networknt fallback (ADR-006).
-2. **Regex DoS in schema `pattern`**: mitigation depends on validator hooks (Phase 4 spike).
-3. **Small-model JSON reliability**: Phase 7 model evaluation (ADR-019).
+1. **openapi-request-validator message mapping** (JSON path, expected/actual): spike when contract validation starts, networknt fallback (ADR-006).
+2. **Regex DoS in schema `pattern`**: mitigation depends on validator hooks (same spike).
+3. **Small-model JSON reliability**: AI phase model evaluation (ADR-019).
 
 ## Implementation plan and milestone checklist
 
+Phase numbers after 2 are tentative and follow the next phase briefs.
+
 ### Phase 1 — Foundation ✅
-- [x] `git init`, `.gitignore`, `.gitattributes`, `.editorconfig`, `.env.example`
-- [x] Backend scaffold (Boot 4.1.1, Java 21, Maven Wrapper), config properties, profiles
-- [x] Enforcer (Java/Maven versions, dependency convergence), `-Xlint:all` + failOnWarning, JaCoCo
-- [x] Flyway `V1`; JPA `ddl-auto=validate`
-- [x] Problem+json error handling (MVC + container), request-id filter, structured logging config
-- [x] Actuator health/info (liveness/readiness)
-- [x] CORS for the local frontend origin
-- [x] Frontend scaffold, app shell (sidebar, responsive drawer), API client, live system status
-- [x] Frontend tests (Vitest + MSW), oxlint, typecheck
-- [x] `docker-compose.yml` with PostgreSQL
-- [x] GitHub Actions (backend, frontend, compose) + Dependabot
-- [x] README build and run instructions
+### Phase 2 — Database design and authentication ✅
+- [x] Entities and Flyway migrations for all core tables, with FKs, indexes, timestamps, delete rules
+- [x] Registration, login, logout, session expiry (idle + absolute), CSRF, lockout, rate limiting
+- [x] Authorization at API and service levels; cross-user isolation; audit trail
+- [x] Bean Validation, DTOs only, pagination, centralized exception handling, transactions
+- [x] Unit, slice, integration, architecture and frontend tests
+- [x] Frontend: login, registration, route protection, user menu, projects management
 
-### Phase 2 — Authentication, projects, and specification import/explorer
-- [ ] Spring Security: session auth, CSRF (SPA), register/login/logout/me, lockout + rate limit, password change; `V2__users.sql`
-- [ ] Auth tests: unit + ITs (CSRF, lockout, session fixation); frontend login/register pages, protected routes, user menu
-- [ ] ArchUnit layering rules
-- [ ] Project CRUD with ownership; cross-user access IT matrix
-- [ ] Ref guard, parser adapter (Jackson 2 isolated), YAML/size limits
-- [ ] Spec versions (immutable), operations projection, activation; validate (dry-run) endpoint with readable errors
-- [ ] UI: projects list, project overview, spec explorer, endpoint detail, import dialog
+### Phase 3 — Specification import and explorer
+- [ ] Ref guard (local `$ref` only), parser adapter (Jackson 2 isolated), size/YAML limits
+- [ ] Immutable versions, `api_operations` projection (new migration), activation, stale marking
+- [ ] Validate (dry-run) endpoint with readable errors
+- [ ] UI: project page, spec explorer, endpoint detail, import dialog
 
-### Phase 3 — Environments, outbound safety, ad hoc execution
-- [ ] Environments, variables, AES-GCM secrets, redactor
-- [ ] `outbound` module: host parser, address classifier, guarded DNS resolver, HttpClient 5 config, manual redirects, size/time limits, capped decompression, header validation, trusted targets
-- [ ] Execution policy; request builder; variable resolver; auth application
-- [ ] Ad hoc execution and history persistence (redacted snapshots), error classification
-- [ ] `demo-target` app + spec with documented deviations
-- [ ] Tests: full SSRF suite, limits, redaction, log capture
-- [ ] UI: environments page, endpoint "send request" panel, execution detail
-
-### Phase 4 — Contract validation
-- [ ] Spike: openapi-request-validator mapping, 3.1 behaviour, regex deadline (record in DECISIONS.md)
-- [ ] `ContractValidator`, finding mapper, `OutcomeEvaluator` (exhaustive tests); validation report endpoint
-- [ ] UI: findings table, validation report view
+### Phase 4 — Environments, outbound safety, ad hoc execution, contract validation
+- [ ] Environment/variable APIs with AES-GCM secrets and redaction
+- [ ] `outbound` module (SSRF guard, guarded DNS, redirects, limits) and `demo-target`
+- [ ] Ad hoc execution writing `test_runs`/`test_results`; validator spike and `ContractValidator`
 
 ### Phase 5 — Deterministic test generation and runs
-- [ ] Test cases (origin, review, lifecycle, risk, dedupe); generators per category; golden-file tests
-- [ ] Async runs (bounded executor, cancel, interrupted recovery, per-user caps); re-import stale marking
-- [ ] UI: test generation workspace, test editor, run dialog, run results, execution history
-
 ### Phase 6 — Coverage and dashboard
-- [ ] Coverage service with defined metrics; dashboard endpoint
-- [ ] UI: coverage report, overview dashboard statistics
-
 ### Phase 7 — AI (Ollama via Spring AI)
-- [ ] `AiGateway`, context sanitizer, output schemas and validator, fallbacks, concurrency/timeouts
-- [ ] Suggestions → `PENDING_REVIEW` with review gate; failure explanations with labelled hypotheses and citations
-- [ ] Model evaluation; stub-model ITs; UI for suggestions and the failure assistant
-
-### Phase 8 — Hardening and release
-- [ ] Backend/frontend Dockerfiles, nginx, full Compose stack (Ollama profile), non-root images
-- [ ] Playwright E2E in CI; security review against SECURITY.md; accessibility pass
-- [ ] Completion definition verified item by item
+### Phase 8 — Hardening and release (Dockerfiles, nginx, full Compose, Playwright E2E in CI)
 
 ## Completion definition tracker
 
 | Criterion | Status |
 |---|---|
-| Frontend and backend run together | ✅ (dev mode, Phase 1) |
-| PostgreSQL persists real application data | ◐ Database and migrations persist; no application data exists yet |
+| Frontend and backend run together | ✅ (dev mode) |
+| PostgreSQL persists real application data | ✅ users, projects, audit trail (Phase 2) |
 | Valid OpenAPI spec can be imported and explored | ☐ |
 | Real tests generated and executed against an authorized test API | ☐ |
 | Contract validation produces explainable results | ☐ |
-| Test history and coverage persist | ☐ |
+| Test history and coverage persist | ◐ History schema and read API exist; nothing writes runs yet |
 | AI suggestions and explanations work through a local model | ☐ |
 | AI outages do not break deterministic testing | ☐ |
-| Auth, authorization and outbound safeguards tested | ☐ |
-| Automated tests and CI pass | ◐ Local runs pass; GitHub CI not yet run (no remote) |
-| Docker-based local setup works | ◐ PostgreSQL only; full stack in Phase 8 |
-| README has reproducible setup and usage | ✅ for Phase 1 scope (verified from a clean checkout) |
-| No unresolved critical defects or falsely advertised features | ✅ README states exactly what exists |
+| Auth, authorization and outbound safeguards tested | ◐ Auth and authorization ✅; outbound safeguards pending |
+| Automated tests and CI pass | ◐ Local runs pass; GitHub CI not yet run |
+| Docker-based local setup works | ◐ PostgreSQL only |
+| README has reproducible setup and usage | ✅ for the Phase 2 scope |
+| No unresolved critical defects or falsely advertised features | ✅ README and UI describe only what exists |

@@ -1,0 +1,10 @@
+# Test profile (activated by @IntegrationTest). The database comes from Testcontainers.
+
+apiforge:
+  auth:
+    # Minimum bcrypt cost keeps the many registrations in tests fast; hashing is still real bcrypt.
+    bcrypt-strength: 4
+    # High enough that the shared test context never trips the per-IP limits by accident;
+    # dedicated tests lower them.
+    login-requests-per-minute: 10000
+    registration-requests-per-minute: 10000

@@ -1,0 +1,54 @@
+package com.apiforge.execution.web;
+
+import java.util.UUID;
+
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.apiforge.auth.service.AuthenticatedUser;
+import com.apiforge.common.web.PageResponse;
+import com.apiforge.execution.service.ExecutionHistoryService;
+import com.apiforge.execution.service.ExecutionHistoryViews.ResultDetail;
+import com.apiforge.execution.service.ExecutionHistoryViews.ResultSummary;
+import com.apiforge.execution.service.ExecutionHistoryViews.RunView;
+
+/** Read-only execution history of a project. Runs are created by the execution engine. */
+@RestController
+@RequestMapping("/api/v1/projects/{projectId}/runs")
+public class ExecutionHistoryController {
+
+    private final ExecutionHistoryService history;
+
+    public ExecutionHistoryController(ExecutionHistoryService history) {
+        this.history = history;
+    }
+
+    @GetMapping
+    public PageResponse<RunView> listRuns(@AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable UUID projectId, @PageableDefault(size = 20) Pageable pageable) {
+        return PageResponse.of(history.listRuns(user.id(), projectId, pageable));
+    }
+
+    @GetMapping("/{runId}")
+    public RunView getRun(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable UUID projectId,
+            @PathVariable UUID runId) {
+        return history.getRun(user.id(), projectId, runId);
+    }
+
+    @GetMapping("/{runId}/results")
+    public PageResponse<ResultSummary> listResults(@AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable UUID projectId, @PathVariable UUID runId, @PageableDefault(size = 50) Pageable pageable) {
+        return PageResponse.of(history.listResults(user.id(), projectId, runId, pageable));
+    }
+
+    @GetMapping("/{runId}/results/{resultId}")
+    public ResultDetail getResult(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable UUID projectId,
+            @PathVariable UUID runId, @PathVariable UUID resultId) {
+        return history.getResult(user.id(), projectId, runId, resultId);
+    }
+}

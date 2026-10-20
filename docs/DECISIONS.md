@@ -10,7 +10,7 @@ Verified on **2026-10-20** (Phase 0) and updated with the versions actually reso
 |---|---|---|
 | Java | 21 (LTS) | Installed: 21.0.8. Baseline for Boot 4 and openapi-request-validator 3.x |
 | Spring Boot | **4.1.1** | Latest GA on Maven Central (4.2.0 is at M2) |
-| Spring Framework / Security | 7.0.9 / 7.0.x | Managed by Boot 4.1 (Framework version resolved in Phase 1; Security added in Phase 2) |
+| Spring Framework / Security | 7.0.9 / 7.1.1 | Managed by Boot 4.1.1 (verified resolved versions) |
 | Maven (via wrapper) | 3.10.0 | Maven Wrapper 3.3.4 from Spring Initializr; no local Maven install needed |
 | Hibernate ORM | 7.4.5.Final | Managed by Boot 4.1.1 |
 | Flyway | 12.4.0 (+ `flyway-database-postgresql`) | Managed by Boot 4.1.1. Boot 4 needs `spring-boot-starter-flyway` |
@@ -24,17 +24,18 @@ Verified on **2026-10-20** (Phase 0) and updated with the versions actually reso
 | Spring AI | **2.0.1** (BOM `spring-ai-bom`) | Latest GA; 2.0.0 release notes: "upgrade to Spring Boot 4.1.0". 2.1.0-M1 targets Boot 4.2, not used |
 | swagger-parser (`io.swagger.parser.v3:swagger-parser`) | **2.1.48** | Latest on Maven Central; Jackson 2 |
 | openapi-request-validator-core (`com.atlassian.oai`) | **3.0.0** | Successor of `swagger-request-validator-core` (relocated). Built for Java 21, Spring 7.0.7, Jackson 2.21.3, networknt json-schema-validator 2.0.1, swagger-parser 2.1.41. We override swagger-parser to 2.1.48 and verify with tests (patch-level, same API) |
-| ArchUnit | latest 1.x | Test only |
+| ArchUnit | 1.5.1 | Test only; rules in `ArchitectureTest` |
 | WireMock | Boot-compatible 3.x | Test only |
 | React | 19.3.x | npm latest |
 | Vite | 8.3.x | npm latest; Node ≥ 22.12 |
 | TypeScript | **6.0.3** (not 7.0) | Pinned by the official `create-vite` 9.3 React template |
 | Tailwind CSS (+ `@tailwindcss/vite`) | 4.3.x | Peer supports Vite 8 |
-| shadcn/ui CLI | 4.22.1 (dev dependency) | Preset `radix-nova`. Components copied into `src/components/ui` (unified `radix-ui` package, `cn` helper from shadcn-ui/cn) |
+| shadcn/ui | CLI 4.22.1 via `npx` only (not a dependency) | Preset `radix-nova`. Components copied into `src/components/ui` (unified `radix-ui` package, `cn` helper from shadcn-ui/cn). Its `tailwind.css` is vendored (ADR-023) |
 | React Router | 8.5.x (data mode) | Requires Node ≥ 22.22 |
 | TanStack Query | 5.10x | npm latest |
 | Recharts | 3.10.x | npm latest |
-| react-hook-form / zod | 7.90.x / 4.6.x | npm latest |
+| react-hook-form / @hookform/resolvers / zod | 7.90.0 / **5.9.2** / 4.6.x | resolvers 6.0.0 has an unresolvable optional-peer conflict (`effect` 3 vs 4) under npm 10; 5.9.2 supports zod 4 |
+| sonner | 2.0.x | Toasts (shadcn component, without `next-themes`) |
 | Vitest / Testing Library / MSW | 5.0.x / 16.3.x / latest | Vitest peer supports Vite 8 |
 | oxlint | 1.8x | Linter from the official Vite template (replaces the planned ESLint, see ADR-015) |
 | Playwright | 1.64.x | E2E |
@@ -136,3 +137,17 @@ Verified on **2026-10-20** (Phase 0) and updated with the versions actually reso
 - **Mockito agent**: loaded explicitly through surefire `argLine` (future JDKs forbid self-attach).
 - **Frontend chunks**: vendor libraries split into `react`, `router`, `ui` and `vendor` chunks (Rolldown `codeSplitting`) instead of raising the 500 kB warning limit.
 - **Auth moved to Phase 2**: the Phase 1 brief covers infrastructure only. Spring Security is added together with authentication so that no permissive placeholder security config ever exists.
+
+### ADR-023 Phase 2: schema, authentication and authorization choices
+- **Table names follow the Phase 2 brief** (`users`, `api_projects`, `specification_versions`, `environments`, `test_suites`, `test_cases`, `test_runs`, `test_results`, `audit_events`). `test_suites` is new compared with the Phase 0 design: test cases belong to a suite (generated, AI suggestions, custom). `test_results` is the Phase 0 `test_execution`.
+- **No coverage snapshot table** (optional in the brief): coverage is derived from persisted tests and results (ADR-013).
+- **Integrity in the database**: composite FKs keep children inside one project; check constraints prevent plaintext passwords, plaintext secrets, unreviewed AI approvals and "PASSED without a response"; triggers make results, specification versions and audit events append-only. Enforcement cannot be skipped by a code path that forgets a rule.
+- **Ids by reference, not JPA associations**: entities hold foreign-key ids; authorization-relevant lookups are explicit, owner- or parent-scoped repository queries.
+- **UUIDv7** ids from Hibernate's `@UuidGenerator(style = VERSION_7)`.
+- **JSON login endpoint + explicit session strategies** instead of Spring form login: the SPA needs JSON responses, so session-id rotation and CSRF token rotation are applied explicitly in `SessionAuthenticator` (and tested).
+- **Lock enforced after password verification** and one message for every sign-in failure, so neither the response nor its timing reveals which accounts exist or are locked. Simple fixed 15-minute lockout after 5 failures (the Phase 0 "exponential up to 1 h" was dropped as unnecessary complexity alongside per-IP rate limiting).
+- **Audit events join the caller's transaction by default**. An earlier draft wrote every event in a new transaction; for registration that would self-deadlock (the new transaction's FK check waits on the uncommitted user row held by the caller). Only events that must survive a rejected request (`CROSS_USER_ACCESS_DENIED`, failed sign-ins) use their own transaction, and they reference committed rows only.
+- **CORS moved from Spring MVC into the security filter chain** so preflight requests are answered before authentication.
+- **Logout auditing lives in the `auth` module** (listener on Spring Security's `LogoutSuccessEvent`), which keeps `audit` free of a dependency on `auth` (ArchUnit cycle rule).
+- **Frontend**: the shadcn CLI is not a project dependency. Its dependency tree carries an unpatched advisory (`braces` ≤ 3.0.3 via `fast-glob`), and the only runtime need was one CSS file, now vendored at `src/styles/shadcn-tailwind.css` (MIT, attribution in the file). `npm audit` reports 0 vulnerabilities. Components are added with `npx shadcn@4.22.1 add …`.
+- **No suppressions**: lint findings were fixed (semantic elements instead of ARIA roles, helpers moved out of component files, `autoFocus` removed) rather than disabled.

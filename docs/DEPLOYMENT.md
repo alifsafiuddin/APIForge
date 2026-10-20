@@ -39,7 +39,9 @@ flowchart LR
 | `APIFORGE_SERVER_PORT` | `8081` | — | Backend HTTP port |
 | `APIFORGE_CORS_ALLOWED_ORIGINS` | `http://localhost:5173` (dev only) | only if the UI is on another origin | Explicit CORS origins for `/api/**` |
 | `APIFORGE_SECRETS_KEY` | dev-only key in `application-dev.yml` | **required** (32 bytes base64); startup fails if missing | AES-GCM key for environment secrets |
-| `APIFORGE_AUTH_REGISTRATION_ENABLED` | `true` | as needed | Open registration |
+| `APIFORGE_AUTH_REGISTRATION_ENABLED` | `true` | as needed | Open self-registration (`false` → 403 `REGISTRATION_DISABLED`) |
+| `APIFORGE_SESSION_IDLE_TIMEOUT` | `30m` | — | Session idle timeout |
+| `APIFORGE_SESSION_ABSOLUTE_TIMEOUT` | `12h` | — | Maximum session lifetime after sign-in |
 | `APIFORGE_OUTBOUND_TRUSTED_TARGETS_ENABLED` | `true` | `false` | Allow configured private targets |
 | `APIFORGE_OUTBOUND_TRUSTED_TARGETS` | `demo-target:8080,localhost:8090` | empty | Trusted host:port list |
 | `APIFORGE_OUTBOUND_ALLOW_TRUSTED_IN_PROD` | — | only for self-hosted single-user | Explicit acknowledgement |
@@ -47,9 +49,9 @@ flowchart LR
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | — | Ollama endpoint (server config only) |
 | `APIFORGE_AI_MODEL` | `llama3.2:3b` | — | Model name (see ADR-019) |
 | `APIFORGE_AI_TIMEOUT` | `120s` | — | Per-call timeout |
-| `APIFORGE_COOKIE_SECURE` | `false` | `true` (behind HTTPS) | Session cookie `Secure` flag |
+| `APIFORGE_COOKIE_SECURE` | `false` (`true` in the `prod` profile) | `true` (served over HTTPS) | `Secure` flag on the session and CSRF cookies |
 
-Variables marked for later phases (secrets key, outbound, AI, cookies) are not read yet. `.env.example` documents every variable in use, with safe placeholders. `.env` is git-ignored. No secret is committed. The dev secrets key is labelled as dev-only and rejected by the `prod` profile.
+Variables for later phases (secrets key, outbound, AI) are not read yet. `.env.example` documents every variable in use, with safe placeholders. `.env` is git-ignored. No secret is committed. The dev secrets key is labelled as dev-only and rejected by the `prod` profile.
 
 ## 4. Profiles
 
@@ -87,7 +89,7 @@ Ollama is not run in CI. AI behaviour is covered by stub-model tests.
 
 ## 8. Production notes
 
-- Terminate TLS in front of the frontend (reverse proxy or platform load balancer) and set `APIFORGE_COOKIE_SECURE=true`.
+- Terminate TLS in front of the frontend (reverse proxy or platform load balancer). The `prod` profile marks cookies `Secure` by default. Enable `server.forward-headers-strategy=native` (or `framework`) behind the proxy so client IPs used for rate limiting and auditing are correct.
 - Run a single backend instance (in-memory sessions and rate limits; ADR-008, ADR-014). Horizontal scaling would require Spring Session JDBC and a shared rate-limit store. This is documented as a known limitation, not implemented.
 - Back up the Postgres volume. The secrets key must be backed up separately: losing it makes stored secrets unrecoverable.
 - If the backend runs in a cloud VM, the outbound blocklist covers metadata endpoints. Platform-level egress controls (security groups, network policies) are still recommended as defence in depth.

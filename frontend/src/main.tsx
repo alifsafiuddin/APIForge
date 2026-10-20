@@ -7,6 +7,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router'
 
 import { createQueryClient } from '@/app/query-client'
 import { routes } from '@/app/routes'
+import { Toaster } from '@/components/ui/sonner'
 
 const rootElement = document.getElementById('root')
 if (!rootElement) {
@@ -20,6 +21,7 @@ createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
+      <Toaster position="bottom-right" />
     </QueryClientProvider>
   </StrictMode>,
 )

@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: **Phase 1**. Implemented: the backend foundation (`common`, `config`, `system` packages), PostgreSQL + Flyway, Actuator health, the error format, request correlation, and the frontend shell. Everything else here is design. See [PROJECT_STATUS.md](PROJECT_STATUS.md).
+> Status: **Phase 2**. Implemented: backend foundation (`common`, `config`, `system`), the full persistence model (all entities and migrations V1–V6), authentication (`auth`), auditing (`audit`), projects (`project`), read-only execution history (`execution`), ArchUnit-enforced layering, and the frontend shell with sign-in, registration and project management. Everything else here is design. See [PROJECT_STATUS.md](PROJECT_STATUS.md).
 
 ## 1. Goals and non-goals
 
@@ -60,6 +60,7 @@ flowchart TB
     subgraph web[HTTP layer: controllers + DTOs per module]
     end
     auth[auth<br/>users, login, sessions]
+    audit[audit<br/>security event trail]
     project[project<br/>ownership, CRUD]
     spec[spec<br/>import, parse, versions, operations]
     env[environment<br/>base URL, auth config, variables]
@@ -75,7 +76,8 @@ flowchart TB
     common[common<br/>errors, paging, clock, ids]
 
     web --> auth & project & spec & env & testcase & gen & exec & coverage & ai & dashboard
-    project --> auth
+    project --> audit
+    auth --> audit
     spec --> project
     env --> project & secrets
     testcase --> spec
@@ -218,9 +220,9 @@ React SPA (Vite, TypeScript 6.0, Tailwind CSS 4, shadcn/ui on Radix primitives, 
 
 | Route | Page | Notes |
 |---|---|---|
-| `/login`, `/register` | Auth | Registration can be disabled by config |
-| `/` | Overview dashboard | Projects, recent runs, pass/fail trend, coverage summary |
-| `/projects` | API projects | List, create, archive, delete (confirmation dialog) |
+| `/login`, `/register` | Auth ✅ | Registration can be disabled by config; `?next=` is restricted to in-app paths |
+| `/` | Overview dashboard | ✅ recent projects + system status; later recent runs, pass/fail trend, coverage summary |
+| `/projects` | API projects ✅ | List (search, sort, active/archived, paging), create, edit, archive/restore, delete (typed confirmation) |
 | `/projects/:projectId` | Project overview | Active spec, environments, last run, coverage tile |
 | `/projects/:projectId/spec` | Specification explorer | Versions, servers, security schemes, tag/path tree, import/re-import |
 | `/projects/:projectId/endpoints/:operationId` | Endpoint detail | Params, bodies, responses, auth, tests for this endpoint, ad hoc send |
@@ -262,7 +264,7 @@ Untrusted content (response bodies, spec descriptions, AI text) is always render
 ├── backend/                     # Maven (wrapper), Spring Boot app
 │   ├── pom.xml, mvnw, mvnw.cmd
 │   └── src/{main,test}/...
-│       main/java/com/apiforge/{auth,project,spec,environment,secrets,testcase,
+│       main/java/com/apiforge/{auth,audit,project,spec,environment,secrets,testcase,
 │                               generation,execution,outbound,validation,coverage,
 │                               ai,dashboard,common,config}
 │       main/resources/db/migration/V*__*.sql

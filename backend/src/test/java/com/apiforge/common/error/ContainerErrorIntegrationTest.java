@@ -11,15 +11,14 @@ import jakarta.servlet.Filter;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.Ordered;
 
-import com.apiforge.support.PostgresTestcontainersConfiguration;
+import com.apiforge.support.IntegrationTest;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -29,8 +28,8 @@ import tools.jackson.databind.ObjectMapper;
  * container forwards it to {@code /error}. This proves such failures still produce the
  * documented problem+json shape without leaking the exception message.
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@Import({ PostgresTestcontainersConfiguration.class, ContainerErrorIntegrationTest.FailingFilterConfig.class })
+@IntegrationTest
+@Import(ContainerErrorIntegrationTest.FailingFilterConfig.class)
 class ContainerErrorIntegrationTest {
 
     @LocalServerPort
@@ -66,6 +65,8 @@ class ContainerErrorIntegrationTest {
             };
             FilterRegistrationBean<Filter> registration = new FilterRegistrationBean<>(filter);
             registration.addUrlPatterns("/test/filter-failure");
+            // Before Spring Security, so the failure happens regardless of authentication.
+            registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
             return registration;
         }
     }

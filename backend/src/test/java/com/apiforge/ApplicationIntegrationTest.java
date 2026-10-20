@@ -13,13 +13,12 @@ import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.MigrationState;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import com.apiforge.support.PostgresTestcontainersConfiguration;
+import com.apiforge.support.BrowserClient;
+import com.apiforge.support.IntegrationTest;
+import com.apiforge.support.TestUsers;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -28,8 +27,7 @@ import tools.jackson.databind.ObjectMapper;
  * Boots the whole application against a real PostgreSQL container and exercises it over HTTP,
  * so filters, the container error page and Actuator behave exactly as in production.
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
-@Import(PostgresTestcontainersConfiguration.class)
+@IntegrationTest
 class ApplicationIntegrationTest {
 
     private final HttpClient http = HttpClient.newHttpClient();
@@ -52,7 +50,6 @@ class ApplicationIntegrationTest {
 
         assertThat(applied).isNotEmpty();
         assertThat(applied).allSatisfy(info -> assertThat(info.getState()).isEqualTo(MigrationState.SUCCESS));
-        assertThat(applied[0].getVersion().getVersion()).isEqualTo("1");
         assertThat(flyway.info().pending()).isEmpty();
     }
 
@@ -90,8 +87,11 @@ class ApplicationIntegrationTest {
     @Test
     void onlyHealthAndInfoActuatorEndpointsAreExposed() throws Exception {
         assertThat(get("/actuator/info").statusCode()).isEqualTo(200);
-        assertThat(get("/actuator/env").statusCode()).isEqualTo(404);
-        assertThat(get("/actuator/beans").statusCode()).isEqualTo(404);
+        // Anonymous callers are stopped by authentication; signed-in users find nothing either.
+        assertThat(get("/actuator/env").statusCode()).isEqualTo(401);
+        BrowserClient signedIn = TestUsers.register(port).client();
+        assertThat(signedIn.get("/actuator/env").status()).isEqualTo(404);
+        assertThat(signedIn.get("/actuator/beans").status()).isEqualTo(404);
     }
 
     @Test
@@ -107,20 +107,30 @@ class ApplicationIntegrationTest {
     }
 
     @Test
-    void unknownApiPathReturnsProblemJsonWithCorrelationId() throws Exception {
+    void unauthenticatedApiRequestReturnsProblemJsonWithCorrelationId() throws Exception {
         HttpResponse<String> response = get("/api/v1/does-not-exist");
 
-        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(response.statusCode()).isEqualTo(401);
         assertThat(response.headers().firstValue("Content-Type")).hasValueSatisfying(
                 value -> assertThat(value).startsWith("application/problem+json"));
         String requestId = response.headers().firstValue("X-Request-Id").orElseThrow();
         JsonNode body = objectMapper.readTree(response.body());
-        assertThat(body.path("status").asInt()).isEqualTo(404);
-        assertThat(body.path("code").asString()).isEqualTo("NOT_FOUND");
+        assertThat(body.path("status").asInt()).isEqualTo(401);
+        assertThat(body.path("code").asString()).isEqualTo("UNAUTHENTICATED");
         assertThat(body.path("requestId").asString()).isEqualTo(requestId);
         assertThat(body.path("instance").asString()).isEqualTo("/api/v1/does-not-exist");
-        assertThat(body.path("detail").asString()).isEqualTo("The requested resource does not exist.");
         assertThat(body.has("trace")).isFalse();
+    }
+
+    @Test
+    void responsesCarrySecurityHeaders() throws Exception {
+        HttpResponse<String> response = get("/api/v1/system/info");
+
+        assertThat(response.headers().firstValue("X-Content-Type-Options")).contains("nosniff");
+        assertThat(response.headers().firstValue("X-Frame-Options")).contains("DENY");
+        assertThat(response.headers().firstValue("Content-Security-Policy"))
+                .contains("default-src 'none'; frame-ancestors 'none'");
+        assertThat(response.headers().firstValue("Referrer-Policy")).contains("no-referrer");
     }
 
     @Test

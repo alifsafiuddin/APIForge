@@ -11,13 +11,14 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.apiforge.common.error.ProblemResponseWriter;
 import com.apiforge.system.service.SystemInfoService;
 import com.apiforge.system.web.SystemInfoController;
 
 import org.springframework.context.annotation.Import;
 
 @WebMvcTest(controllers = SystemInfoController.class, properties = "apiforge.cors.allowed-origins=http://localhost:5173")
-@Import({ SystemInfoService.class, ClockConfig.class })
+@Import({ SystemInfoService.class, ClockConfig.class, SecurityConfig.class, ProblemResponseWriter.class })
 class CorsConfigurationTest {
 
     private static final String ALLOWED = "http://localhost:5173";

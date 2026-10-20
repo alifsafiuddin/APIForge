@@ -9,7 +9,12 @@ import jakarta.validation.ConstraintViolationException;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpHeaders;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
@@ -91,6 +96,45 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.badRequest().body(problem);
     }
 
+    @ExceptionHandler(ApiException.class)
+    ResponseEntity<ProblemDetail> handleApiException(ApiException ex, HttpServletRequest request) {
+        ProblemDetail problem = Problems.create(ex.code().status(), ex.code(), ex.getMessage(), request);
+        if (!ex.fieldErrors().isEmpty()) {
+            Problems.withErrors(problem, ex.fieldErrors());
+        }
+        return ResponseEntity.status(ex.code().status()).body(problem);
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    ResponseEntity<ProblemDetail> handleOptimisticLock(OptimisticLockingFailureException ex,
+            HttpServletRequest request) {
+        return problem(ErrorCode.STALE_VERSION,
+                "The resource was modified by another request. Reload it and try again.", request);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    ResponseEntity<ProblemDetail> handleDataIntegrity(DataIntegrityViolationException ex, HttpServletRequest request) {
+        // Constraint names and SQL stay in the server log; the client gets a generic conflict.
+        log.warn("Data integrity violation processing {} {}: {}", request.getMethod(), request.getRequestURI(),
+                ex.getMostSpecificCause().getMessage());
+        return problem(ErrorCode.CONFLICT, "The request conflicts with existing data.", request);
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    ResponseEntity<ProblemDetail> handleAuthentication(AuthenticationException ex, HttpServletRequest request) {
+        return problem(ErrorCode.UNAUTHENTICATED, "Authentication is required.", request);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    ResponseEntity<ProblemDetail> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+        return problem(ErrorCode.FORBIDDEN, "You do not have permission to perform this action.", request);
+    }
+
+    @ExceptionHandler(PropertyReferenceException.class)
+    ResponseEntity<ProblemDetail> handlePropertyReference(PropertyReferenceException ex, HttpServletRequest request) {
+        return problem(ErrorCode.VALIDATION_ERROR, "Unsupported sort or filter property.", request);
+    }
+
     @ExceptionHandler(Exception.class)
     ResponseEntity<ProblemDetail> handleUnexpected(Exception ex, HttpServletRequest request) {
         log.error("Unhandled exception processing {} {}", request.getMethod(), request.getRequestURI(), ex);
@@ -111,6 +155,10 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             Problems.decorate(problem, ErrorCode.fromStatus(statusCode.value()), servletRequest(request));
         }
         return super.createResponseEntity(body, headers, statusCode, request);
+    }
+
+    private static ResponseEntity<ProblemDetail> problem(ErrorCode code, String detail, HttpServletRequest request) {
+        return ResponseEntity.status(code.status()).body(Problems.create(code.status(), code, detail, request));
     }
 
     private ProblemDetail validationProblem(WebRequest request) {

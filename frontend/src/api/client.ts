@@ -54,34 +54,56 @@ type RequestOptions = {
   acceptStatuses?: number[]
 }
 
+/** Schema for endpoints that answer 204 No Content. */
+export const noContent = z.undefined()
+
+const CSRF_COOKIE = 'XSRF-TOKEN'
+const CSRF_HEADER = 'X-XSRF-TOKEN'
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+const credentials: RequestCredentials = API_BASE_URL ? 'include' : 'same-origin'
+
+function readCookie(name: string): string | undefined {
+  const prefix = `${name}=`
+  const cookie = document.cookie.split('; ').find((entry) => entry.startsWith(prefix))
+  return cookie === undefined ? undefined : decodeURIComponent(cookie.slice(prefix.length))
+}
+
+/**
+ * The backend issues the CSRF token as a cookie on every response (Spring Security SPA mode).
+ * If none has been received yet, ask for one before the first state-changing request.
+ */
+async function csrfToken(forceRefresh: boolean): Promise<string | undefined> {
+  if (!forceRefresh) {
+    const existing = readCookie(CSRF_COOKIE)
+    if (existing) {
+      return existing
+    }
+  }
+  try {
+    await fetch(`${API_BASE_URL}/api/v1/auth/csrf`, { credentials })
+  } catch {
+    return undefined
+  }
+  return readCookie(CSRF_COOKIE)
+}
+
 /**
  * Performs a JSON request and validates the response body against `schema`, so the UI never
- * renders data whose shape it has not checked.
+ * renders data whose shape it has not checked. State-changing requests carry the CSRF token
+ * and are retried once if the token was rejected (it rotates on sign-in and sign-out).
  */
 export async function apiRequest<T>(path: string, schema: z.ZodType<T>, options: RequestOptions = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json, application/problem+json' }
-  if (options.body !== undefined) {
-    headers['Content-Type'] = 'application/json'
-  }
+  const method = (options.method ?? 'GET').toUpperCase()
+  const unsafe = UNSAFE_METHODS.has(method)
 
-  let response: Response
-  try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      method: options.method ?? 'GET',
-      headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
-      signal: options.signal,
-      credentials: API_BASE_URL ? 'include' : 'same-origin',
-    })
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      throw error
-    }
-    throw new ApiError({ message: 'Could not reach the APIForge backend.', status: 0, code: 'NETWORK_ERROR' })
+  let response = await send(path, method, options, unsafe ? await csrfToken(false) : undefined)
+  let payload = await readJson(response)
+  if (unsafe && response.status === 403 && problemCode(payload) === 'CSRF_INVALID') {
+    response = await send(path, method, options, await csrfToken(true))
+    payload = await readJson(response)
   }
 
   const requestId = response.headers.get('X-Request-Id') ?? undefined
-  const payload = await readJson(response)
 
   if (!response.ok && !options.acceptStatuses?.includes(response.status)) {
     throw toApiError(response, payload, requestId)
@@ -97,6 +119,35 @@ export async function apiRequest<T>(path: string, schema: z.ZodType<T>, options:
     })
   }
   return parsed.data
+}
+
+async function send(path: string, method: string, options: RequestOptions, csrf: string | undefined) {
+  const headers: Record<string, string> = { Accept: 'application/json, application/problem+json' }
+  if (options.body !== undefined) {
+    headers['Content-Type'] = 'application/json'
+  }
+  if (csrf) {
+    headers[CSRF_HEADER] = csrf
+  }
+  try {
+    return await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers,
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      signal: options.signal,
+      credentials,
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw error
+    }
+    throw new ApiError({ message: 'Could not reach the APIForge backend.', status: 0, code: 'NETWORK_ERROR' })
+  }
+}
+
+function problemCode(payload: unknown): string | undefined {
+  const parsed = problemSchema.safeParse(payload)
+  return parsed.success ? parsed.data.code : undefined
 }
 
 async function readJson(response: Response): Promise<unknown> {

@@ -7,6 +7,11 @@ spring:
     username: ${APIFORGE_DB_USER}
     password: ${APIFORGE_DB_PASSWORD}
 
+apiforge:
+  auth:
+    # Production is served over HTTPS: cookies must not travel over plain HTTP.
+    secure-cookies: ${APIFORGE_COOKIE_SECURE:true}
+
 logging:
   structured:
     format:

@@ -1,6 +1,6 @@
 # Testing Strategy
 
-> Status: **Phase 0 design**. No tests exist yet. This document defines what will be tested and how. Results are only reported in [PROJECT_STATUS.md](PROJECT_STATUS.md) after they have actually been run.
+> Status: strategy for all phases; section 7 lists the tests that exist (Phases 1–2). Results are only reported in [PROJECT_STATUS.md](PROJECT_STATUS.md) after they have actually been run.
 
 ## 1. Principles
 
@@ -18,7 +18,7 @@
 | Unit | JUnit 5 + AssertJ + Mockito. Pure logic: generators, outcome evaluator, address classifier, ref guard, redactor, AI output validator, variable resolver | Vitest + Testing Library: components, hooks, zod schemas, formatting |
 | Slice | `@WebMvcTest` + Spring Security test (auth, CSRF, validation, problem+json); `@DataJpaTest` + Testcontainers (constraints, queries) | Page-level tests with MSW-mocked API |
 | Integration | `@SpringBootTest` + Testcontainers PostgreSQL + WireMock target + MockMvc: full flows (import → generate → run → validate → coverage) | — |
-| Architecture | ArchUnit (from Phase 2, when there are layered modules to check): layering, module boundaries, "only `outbound` builds HTTP clients", "only `ai` uses Spring AI" | oxlint rules (`react/no-danger` as error, hooks rules, jsx-a11y) |
+| Architecture | ArchUnit (implemented in Phase 2): layering, module boundaries, "only `outbound` builds HTTP clients", "only `ai` uses Spring AI" | oxlint rules (`react/no-danger` as error, hooks rules, jsx-a11y) |
 | End-to-end | — | Playwright against the Docker Compose stack (backend + Postgres + demo-target; Ollama stubbed or absent) |
 
 ## 3. Business-rule test catalogue (planned)
@@ -75,19 +75,34 @@ npm run test:coverage
 cd e2e && npx playwright test            # Phase 8
 ```
 
-## 7. Tests implemented so far (Phase 1)
+
+## 7. Tests implemented so far (Phases 1–2)
+
+Backend: 129 tests (JUnit 5, Testcontainers PostgreSQL 18.6, real HTTP for integration tests). Frontend: 51 tests (Vitest, Testing Library, MSW). Results of the latest run are recorded in [PROJECT_STATUS.md](PROJECT_STATUS.md).
+
+### Backend
 
 | Suite | Tests | What it proves |
 |---|---|---|
-| `ApplicationIntegrationTest` (Testcontainers PostgreSQL, real HTTP on a random port) | 8 | Flyway applies V1 with no pending migrations; `citext` installed; health/readiness/liveness UP with DB component and no details; only `health` and `info` exposed; system info; 404 problem+json with `requestId` matching the header; client request id propagated |
-| `ApiExceptionHandlerTest` (`@WebMvcTest`, test-only controller) | 8 | Field, parameter and service-level (`ConstraintViolationException`) validation errors list fields; malformed JSON and unknown properties give `MALFORMED_REQUEST` without parser details; 405/415 in problem format; 500 hides the exception message |
-| `ContainerErrorIntegrationTest` (real server) | 1 | An exception thrown by a servlet filter (outside MVC) still yields problem+json with `INTERNAL_ERROR`, the original `instance`, a matching `requestId`, and no exception text |
-| `ProblemErrorControllerTest` | 11 | Container status mapped to code; non-error or unknown statuses reported as 500; original URI and correlation header restored; exception messages never in `detail` |
-| `RequestCorrelationFilterTest` | 8 | Id generated when missing; safe client ids reused; unsafe ids (CRLF injection, HTML, too short or long) replaced; MDC cleared even when the chain throws |
-| `CorsConfigurationTest` | 4 | Allowed origin preflight and simple request succeed (credentials, exposed `X-Request-Id`); other origins and unlisted headers rejected |
-| `ApiForgePropertiesTest` | 4 | Empty origin list allowed; wildcard or path origins fail startup |
-| Frontend `client.test.ts` | 6 | Schema-validated success; problem+json mapped to `ApiError`; schema mismatch, network failure and bodiless 502 classified; accepted 503 parsed |
-| Frontend `SystemStatusCard.test.tsx` | 3 | Live components and version rendered; DB DOWN on 503; unreachable backend explained |
-| Frontend `AppShell.test.tsx` | 4 | Active nav item, header status, mobile drawer, 404 inside the shell |
+| `AuthIntegrationTest` | 14 | Registration stores only a `{bcrypt}` hash and signs in; duplicate e-mail rejected case-insensitively; field validation; weak passwords rejected by policy (nothing stored); login sets `HttpOnly`/`SameSite=Lax` session and `SameSite=Strict` CSRF cookies; unknown e-mail and wrong password give identical 401s; lockout after 5 failures even with the correct password, recovery after expiry; session id rotation (old id unusable); logout invalidates server-side (replayed cookie rejected); every protected endpoint and unknown path → 401 problem+json; public endpoints stay open; requests without CSRF token → 403 `CSRF_INVALID` with no side effect; CSRF token rotates on login and the new one works immediately |
+| `RestrictedAuthConfigurationIntegrationTest` (separate context) | 2 | Registration can be disabled (403, nothing stored); per-IP sign-in limit → 429 `RATE_LIMITED` with `Retry-After` |
+| `ProjectIntegrationTest` | 8 | CRUD round trip persists (trimmed names, cleared description, version increments); stale version → 409; names unique per owner among active projects (archive frees, restore conflicts, other users unaffected); per-field validation (blank, too long, control characters, unknown property, missing version); paging, sorting, literal `%`/`_` search, size cap 100, unsupported sort → 400; archived listing; 404 vs 400 for unknown vs malformed ids; delete cascades to environments and runs |
+| `CrossUserAccessIntegrationTest` | 7 | A second user gets 404 on all five project-scoped read endpoints and on update/delete; foreign and missing projects are indistinguishable; owner data unchanged; listings contain only own projects; another project's run is unreachable through one's own project id; attempts are audited (random ids are not); owner sees full history |
+| `SchemaIntegrationTest` | 11 | V1–V6 applied in order; all tables exist; entities round-trip incl. jsonb and UUIDv7 ids; plaintext password rejected; secret variables only as ciphertext; AI test cannot be approved without review; cross-project links rejected by composite FKs; results, spec versions and audit events immutable; PASSED requires a response; deleting a test case keeps its results; deleting a user cascades owned data and keeps the audit trail |
+| `ApplicationIntegrationTest` | 9 | Migrations applied; `citext`; health/readiness/liveness with DB and no details; only `health`/`info` exposed (401 anonymous, 404 signed in); system info; anonymous API → 401 problem+json with matching request id; security headers; request-id propagation |
+| `ContainerErrorIntegrationTest` | 1 | Filter-level exception → problem+json without exception text |
+| `ApiExceptionHandlerTest` (`@WebMvcTest` with real `SecurityConfig`) | 14 | Validation (body, params, service-level), malformed JSON, unknown properties, 405/415, `ApiException` mapping, optimistic lock → `STALE_VERSION`, integrity violation hides constraint names, access denied → 403 (not 500), anonymous → 401 via entry point, POST without CSRF → 403, 500 hides internals |
+| `CorsConfigurationTest` | 4 | CORS through Spring Security: allowed origin (credentials, exposed `X-Request-Id`); other origins and unlisted headers rejected |
+| `ArchitectureTest` (ArchUnit) | 8 | Controllers use neither repositories nor entities; web layer never uses repositories; repositories only used by services; entities only in `domain` packages; services independent of controllers and the servlet API; no cycles between feature modules; no Jackson 2 usage |
+| Unit: `PasswordPolicyTest` (10), `UserLockoutTest` (3), `FixedWindowRateLimiterTest` (5), `AbsoluteSessionTimeoutFilterTest` (3), `PaginationTest` (3), `ProjectServiceTest` (2), `AuthDtosTest` (2), `RequestCorrelationFilterTest` (8), `ProblemErrorControllerTest` (11), `ApiForgePropertiesTest` (4) | 51 | Password rules incl. bytes vs characters and e-mail containment; lockout counter/expiry; rate-limit windows and `Retry-After`; absolute session lifetime; sort allow-list; LIKE escaping and method risk levels; password redaction in DTO `toString()`; correlation ids; container error mapping; property validation |
 
-Results of the latest run are recorded in [PROJECT_STATUS.md](PROJECT_STATUS.md).
+### Frontend
+
+| Suite | Tests | What it proves |
+|---|---|---|
+| `client.test.ts` | 9 | Schema-validated success; problem+json → `ApiError`; invalid shape, network failure and bodiless 502 classified; CSRF token fetched when missing and sent only on state-changing requests; one retry with a fresh token after `CSRF_INVALID`; 204 handling; accepted 503 body parsed |
+| `auth.test.tsx` | 13 | Signed-out users redirected to login with `next`; signed-in users skip the login page; session-check failure shows retry; mid-session 401 returns to login; login sends CSRF header and continues to `next`; invalid credentials message; client validation; registration success, local password checks, server field errors, `EMAIL_TAKEN` on the e-mail field; sign-out via user menu; initials |
+| `redirect.test.ts` | 12 | Open-redirect protection for `next` (absolute, protocol-relative, backslash, `javascript:`, login/register loops) |
+| `ProjectsPage.test.tsx` | 10 | Listing, empty state, create, duplicate-name field error, blank-name validation without a request, typed-name delete confirmation, archive/restore, pagination, search, load error with retry |
+| `AppShell.test.tsx` | 4 | Active navigation, header status and account menu, mobile drawer, 404 inside the shell |
+| `SystemStatusCard.test.tsx` | 3 | Live component health, DB down on 503, unreachable backend |

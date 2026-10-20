@@ -1,6 +1,6 @@
 # Security
 
-> Status: **Phase 0 design**. Controls listed here are requirements. Each control is marked implemented, with a link to its tests, in the phase that delivers it. Nothing below is implemented yet.
+> Status: §3 (authentication and sessions), §4 (authorization) and the secrets-at-rest database constraint are **implemented and tested (Phase 2)**. All other sections remain requirements for later phases; each control is marked when its phase delivers it.
 
 APIForge AI makes HTTP requests to user-supplied URLs, stores credentials for those APIs, parses untrusted documents, and sends data to an LLM. Each of these is a significant attack surface. This document is the threat model and the list of required controls.
 
@@ -42,25 +42,35 @@ flowchart LR
 
 Everything in the *Untrusted input* box is treated as data. Even response bodies from a "trusted" demo target are rendered as text and limited in size.
 
-## 3. Authentication and sessions
+## 3. Authentication and sessions ✅ Phase 2
 
-| Control | Detail |
-|---|---|
-| Password storage | `DelegatingPasswordEncoder` with bcrypt (cost 12). Plaintext is never stored or logged |
-| Password policy | Length 12–64 characters and ≤ 72 bytes UTF-8 (the bcrypt input limit; longer input is rejected, not silently truncated). Check against a small bundled list of common passwords. No composition rules (NIST SP 800-63B) |
-| Session | Server-side `HttpSession`. Cookie is `HttpOnly`, `SameSite=Lax`, `Secure` in prod, idle timeout 30 min, absolute 12 h. The session id rotates on login (fixation protection) and all sessions are invalidated on password change |
-| CSRF | Spring Security `CookieCsrfTokenRepository` + SPA handler. Required on all non-GET requests, including login and logout |
-| Brute force | Per-account lockout after 5 failures (15 min, exponential up to 1 h). Per-IP rate limit on `/auth/login` and `/auth/register` (in-memory token bucket). Error messages do not reveal whether an email exists |
-| Registration | Can be disabled (`APIFORGE_AUTH_REGISTRATION_ENABLED=false`) for deployed demos |
+| Control | Implementation | Verified by |
+|---|---|---|
+| Password storage | `DelegatingPasswordEncoder` with bcrypt, cost 12 (configurable 4–16; tests use 4). Hashes carry an algorithm prefix (`{bcrypt}…`) so the algorithm can change later. A database check constraint rejects anything that is not encoder output | `AuthIntegrationTest.registrationCreatesAccountStoresOnlyBcryptHashAndSignsIn`, `SchemaIntegrationTest.plaintextPasswordCannotBeStored` |
+| Password policy | 12–64 characters, ≤ 72 bytes UTF-8 (bcrypt's limit; rejected rather than truncated), not whitespace-only, not in a bundled list of common long passwords, not containing the e-mail address (or its local part, if ≥ 4 characters). No composition rules (NIST SP 800-63B) | `PasswordPolicyTest`, `AuthIntegrationTest.weakPasswordsAreRejectedByPolicy` |
+| Passwords never echoed or logged | Responses contain no password field; request DTOs override `toString()` to redact it; audit log lines contain user ids only | `AuthDtosTest`, registration IT body check |
+| Session | Server-side `HttpSession`, cookie `APIFORGE_SESSION`: `HttpOnly`, `SameSite=Lax`, `Secure` when `APIFORGE_COOKIE_SECURE=true` (default in `prod`), cookie-only tracking (no `;jsessionid` URLs). Idle timeout 30 min (`APIFORGE_SESSION_IDLE_TIMEOUT`), absolute timeout 12 h after sign-in (`AbsoluteSessionTimeoutFilter`) | Cookie-attribute assertions in `AuthIntegrationTest`, `AbsoluteSessionTimeoutFilterTest` |
+| Session fixation | The JSON login applies `ChangeSessionIdAuthenticationStrategy` explicitly; the previous session id stops working | `AuthIntegrationTest.loginRotatesSessionIdSoAPreviousSessionCannotBeReused` |
+| Logout | `POST /api/v1/auth/logout` (CSRF-protected): invalidates the server session, deletes the cookie, rotates the CSRF token; a replayed old cookie is rejected | `AuthIntegrationTest.logoutInvalidatesTheSessionServerSide` |
+| CSRF | Spring Security SPA mode: `XSRF-TOKEN` cookie (readable by the SPA, `SameSite=Strict`) echoed in `X-XSRF-TOKEN`; required on every state-changing request including login, register and logout; token rotated on sign-in (`CsrfAuthenticationStrategy`) with the new cookie sent in the same response | `AuthIntegrationTest.stateChangingRequestsWithoutCsrfTokenAreRejected`, `csrfTokenIsRotatedOnLogin`, `ApiExceptionHandlerTest.postWithoutCsrfTokenIsRejected` |
+| Account enumeration | Every sign-in failure (unknown e-mail, wrong password, locked or disabled account) returns the same 401 `BAD_CREDENTIALS` and message. Unknown e-mails still cost a bcrypt computation (Spring's dummy-hash check). The lock is enforced **after** password verification, so a locked account answers at the same speed. Registration necessarily reveals an existing address (409 `EMAIL_TAKEN`); it is rate-limited | `AuthIntegrationTest.invalidCredentialsGiveIdenticalResponsesForUnknownEmailAndWrongPassword` |
+| Brute force: per account | 5 consecutive failures lock sign-in for 15 minutes, even with the correct password; the counter restarts after a lock and resets on success. Failure counting takes a row lock, so concurrent attempts cannot under-count | `UserLockoutTest`, `AuthIntegrationTest.accountLocksAfterRepeatedFailuresEvenForTheCorrectPasswordUntilLockExpires` |
+| Brute force: per client | In-memory fixed-window limits per client IP: 10 sign-ins and 5 registrations per minute, applied before any hashing; 429 `RATE_LIMITED` with `Retry-After`. Behind a reverse proxy, enable `server.forward-headers-strategy` so the client IP is correct; `X-Forwarded-For` is never trusted directly | `FixedWindowRateLimiterTest`, `RestrictedAuthConfigurationIntegrationTest` |
+| Registration switch | `APIFORGE_AUTH_REGISTRATION_ENABLED=false` → 403 `REGISTRATION_DISABLED` | `RestrictedAuthConfigurationIntegrationTest.registrationCanBeDisabled` |
+| Audit trail | `audit_events` records registration, sign-in success and failure (with the attempted e-mail), lockouts, sign-out, project creation and deletion, and cross-user access attempts, with client IP and request id. Append-only (database trigger) | Assertions in the auth and cross-user ITs, `SchemaIntegrationTest.historyAndSpecificationsAreImmutable` |
+
+Known limitations: sessions and rate-limit counters are in memory (single backend instance; a restart signs everyone out). A disabled account is rejected before password verification, which is measurably faster; there is no account-disabling feature yet. Password change (which will also end other sessions) arrives with the account settings page.
 
 ADR-008 records why session + CSRF was chosen over JWT in `localStorage`.
 
-## 4. Authorization
+## 4. Authorization ✅ Phase 2
 
-- Single role (`USER`), with **ownership-based** access: every project-scoped service method begins with `projectAccess.requireOwned(projectId, currentUserId)`.
-- Child resources (environment, test, run, execution, finding) are loaded **through** the project (`findByIdAndProjectId`), never by bare id.
-- A non-owner gets `404`, which prevents IDOR and project enumeration.
-- Tests: an integration test matrix calls every project-scoped endpoint as a second user and asserts `404` and no side effects (Phase 2 onward; extended each phase).
+- **API level**: every endpoint requires an authenticated session except an explicit allow-list (`/actuator/health/**`, `/actuator/info`, `/api/v1/system/info`, `/api/v1/auth/csrf`, `POST /api/v1/auth/login`, `POST /api/v1/auth/register`, `/error`). Anything not listed, including unknown paths, answers 401 to anonymous callers.
+- **Service level**: single role (`USER`) with **ownership-based** access. Every project-scoped service method obtains the project through `ProjectAccessService.requireOwned(projectId, userId)`, which queries by id **and** owner. Child resources are loaded through their parent (`findByIdAndProjectId`, run → results), never by bare id.
+- A project that exists but belongs to someone else returns the **same 404** as a missing one (same code and message). Such attempts are recorded as `CROSS_USER_ACCESS_DENIED` audit events.
+- **Database level**: composite foreign keys keep child rows (suites, test cases, runs, the active spec version) inside one project, so a bug elsewhere cannot link one user's data into another's project.
+- **Architecture level**: ArchUnit rules forbid controllers and the web layer from touching repositories or entities, so authorization cannot be bypassed by a controller querying the database directly (`ArchitectureTest`).
+- Verified by `CrossUserAccessIntegrationTest`: a second user receives 404 on every project-scoped read endpoint (project, runs, run, results, result), cannot update or delete, sees only their own projects in listings, cannot reach another project's run through their own project id, and the owner's data is unchanged afterwards.
 
 ## 5. Untrusted OpenAPI documents
 
@@ -166,7 +176,7 @@ Other client settings:
 
 | Control | Detail |
 |---|---|
-| Encryption at rest | Secret variables are encrypted with AES-256-GCM. Key from `APIFORGE_SECRETS_KEY` (base64, 32 bytes). Startup fails in prod if missing; the dev profile uses a documented dev-only key. A `key_id` column allows rotation |
+| Encryption at rest | ✅ Phase 2 (schema): the database refuses to store a secret variable in plaintext (`ck_environment_variables_storage`). Phase 3 (cipher): secret variables are encrypted with AES-256-GCM. Key from `APIFORGE_SECRETS_KEY` (base64, 32 bytes). Startup fails in prod if missing; the dev profile uses a documented dev-only key. A `key_id` column allows rotation |
 | Write-only | The API never returns secret values, only `hasValue: true` |
 | Redaction | `Redactor` replaces known secret values (exact match, plus URL-encoded and Base64 forms for Basic auth) and sensitive headers (`Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `X-API-Key`, and any header configured as an API key header) with `«redacted»`. It runs **before** persisting request and response snapshots, before logging, and before building AI prompts |
 | Logging | No bodies, header values or variable values at INFO and above. Request logging includes method, host, path template, status, duration and request id. A log-capture test asserts that a planted secret never appears in logs |
@@ -185,11 +195,12 @@ Other client settings:
 
 ## 9. Web application hardening
 
-- Security headers: `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`. Also `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and `Strict-Transport-Security` in prod.
-- Request size limits: multipart 5 MB, JSON body 2 MB.
-- Bean Validation on all inputs, and unknown JSON properties rejected.
-- Errors are generic, with a request id. Stack traces are never returned.
-- Actuator exposes only `health` and `info`.
+- ✅ API responses (Phase 2): `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store` (Spring Security defaults) — verified by `ApplicationIntegrationTest.responsesCarrySecurityHeaders`.
+- Planned for the SPA's HTML (Phase 8, nginx): `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`, plus `Strict-Transport-Security`.
+- Request size limits: multipart 5 MB, JSON body 2 MB (with spec import).
+- ✅ Bean Validation on all inputs, and unknown JSON properties rejected.
+- ✅ Errors are generic, with a request id. Stack traces are never returned.
+- ✅ Actuator exposes only `health` and `info`.
 - Containers run as non-root, with a read-only root filesystem where possible.
 
 ## 10. Supply chain
@@ -206,10 +217,10 @@ Other client settings:
 | T2 | DNS rebinding between check and connect | Info disclosure | High | Resolver used for connect is the validated one | `GuardedDnsResolverTest` with fake DNS returning different answers per call |
 | T3 | Redirect to internal address | Info disclosure | High | Manual redirects, revalidated per hop | WireMock IT: public → 302 → 127.0.0.1 is blocked |
 | T4 | External `$ref` fetch during import | SSRF / LFI | High | §5 ref guard | `RefGuardTest` |
-| T5 | IDOR across projects | Info disclosure / Tampering | High | Ownership checks, 404 | Cross-user IT matrix |
+| T5 | IDOR across projects | Info disclosure / Tampering | High | Ownership checks, 404, composite FKs | ✅ `CrossUserAccessIntegrationTest`, `SchemaIntegrationTest` |
 | T6 | Secret leakage (API, logs, history, AI) | Info disclosure | High | §7 | Redaction unit tests, log-capture IT, API response IT |
-| T7 | CSRF on state-changing endpoints | Tampering | Medium | CSRF tokens | Security IT without token returns 403 |
-| T8 | Credential stuffing | Spoofing | Medium | Lockout, rate limit, bcrypt | `LoginLockoutIT` |
+| T7 | CSRF on state-changing endpoints | Tampering | Medium | CSRF tokens | ✅ `AuthIntegrationTest`, `ApiExceptionHandlerTest` |
+| T8 | Credential stuffing | Spoofing | Medium | Lockout, rate limit, bcrypt, uniform errors | ✅ `AuthIntegrationTest`, `RestrictedAuthConfigurationIntegrationTest` |
 | T9 | XSS via spec/response/AI text | Tampering | Medium | Text rendering, CSP | Frontend tests with malicious payloads |
 | T10 | DoS via huge spec, YAML bomb, huge or slow responses, regex | DoS | Medium | §5, §6.4 | Limit unit tests, slow-target IT |
 | T11 | Prompt injection leading to harmful action | Tampering / EoP | Medium | No action path, review gate, output validation | `AiOutputValidatorTest`, review-gate IT |

@@ -1,6 +1,6 @@
 # API Design
 
-> Status: conventions, error format, system endpoints and Actuator are **implemented (Phase 1)**. Every other endpoint is still a plan, marked with the phase that delivers it.
+> Status: conventions, error format, system endpoints and Actuator (Phase 1), plus authentication, projects and read-only execution history (Phase 2) are **implemented** (marked ✅). Every other endpoint is still a plan, marked with the phase that delivers it.
 
 ## 1. Conventions
 
@@ -14,7 +14,6 @@
 
 ```json
 {
-  "type": "about:blank",
   "title": "Bad Request",
   "status": 400,
   "detail": "One or more fields are invalid.",
@@ -25,7 +24,7 @@
 }
 ```
 
-- `type` is `about:blank`, so `title` is the HTTP reason phrase. Clients branch on **`code`**, the stable machine-readable identifier (implemented in `ErrorCode.java`), never on `title` or `detail`.
+- `type` is omitted, which RFC 9457 defines as `about:blank`, so `title` is the HTTP reason phrase. Clients branch on **`code`**, the stable machine-readable identifier (implemented in `ErrorCode.java`), never on `title` or `detail`.
 - `requestId` equals the `X-Request-Id` response header. Every response carries this header. A client-supplied `X-Request-Id` matching `^[A-Za-z0-9._-]{8,64}$` is reused; anything else is replaced with a UUID.
 - `errors` is present only for input-validation failures.
 - The same shape is used for errors raised outside Spring MVC (container `/error` dispatch). Stack traces, exception messages and parser details are never returned.
@@ -33,16 +32,15 @@
 | Status | `code` examples |
 |---|---|
 | 400 | `VALIDATION_ERROR`, `MALFORMED_REQUEST` (unreadable JSON, unknown property, wrong type) |
-| 401 | `UNAUTHENTICATED`, `BAD_CREDENTIALS` |
-| 403 | `CSRF_INVALID`, `EXECUTION_POLICY_DENIED`, `TEST_NOT_APPROVED` |
+| 401 | `UNAUTHENTICATED` (no or expired session), `BAD_CREDENTIALS` (sign-in failed for any reason, including a locked account) |
+| 403 | `CSRF_INVALID`, `REGISTRATION_DISABLED`, `FORBIDDEN`; later `EXECUTION_POLICY_DENIED`, `TEST_NOT_APPROVED` |
 | 404 | `NOT_FOUND` |
 | 405 / 406 / 415 | `METHOD_NOT_ALLOWED`, `NOT_ACCEPTABLE`, `UNSUPPORTED_MEDIA_TYPE` |
 | 500 | `INTERNAL_ERROR` (details logged server-side under the `requestId`) |
-| 409 | `CONFLICT`, `STALE_VERSION` (optimistic lock), `DUPLICATE_NAME` |
+| 409 | `CONFLICT` (generic integrity conflict), `STALE_VERSION` (optimistic lock), `DUPLICATE_NAME`, `EMAIL_TAKEN` |
 | 413 | `PAYLOAD_TOO_LARGE` |
 | 422 | `SPEC_INVALID`, `SPEC_EXTERNAL_REF`, `DESTINATION_BLOCKED` |
-| 423 | `ACCOUNT_LOCKED` |
-| 429 | `RATE_LIMITED`, `AI_BUSY` |
+| 429 | `RATE_LIMITED` (with `Retry-After`), later `AI_BUSY` |
 | 503 | `AI_UNAVAILABLE` (only where no fallback applies) |
 
 - Request DTOs are validated with Bean Validation. Unknown JSON properties are rejected (`FAIL_ON_UNKNOWN_PROPERTIES`).
@@ -58,29 +56,35 @@
 |---|---|---|
 | GET | `/api/v1/system/info` | *public*. `{name, version, apiVersion, serverTime}`. `version` comes from Maven build metadata, or `"unknown"` if absent |
 
-### 2.1 Auth and account — Phase 2
+### 2.1 Auth — Phase 2 ✅ implemented
+
+Paths below are relative to `/api/v1`.
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/auth/csrf` | *public*. Issues the CSRF cookie |
-| POST | `/auth/register` | *public* (if `apiforge.auth.registration-enabled`). `{email, password, displayName}` → 201 |
-| POST | `/auth/login` | *public*. `{email, password}` → 200 user; rotates the session id |
-| POST | `/auth/logout` | Invalidates the session → 204 |
-| GET | `/auth/me` | Current user `{id, email, displayName}` |
-| PATCH | `/users/me` | Update `displayName` |
-| POST | `/users/me/password` | `{currentPassword, newPassword}` → 204; invalidates other sessions |
+| GET | `/auth/csrf` | *public*. 204; the response sets the `XSRF-TOKEN` cookie (Spring Security also refreshes it on every response) |
+| POST | `/auth/register` | *public*. `{email, password, displayName}` → 201 `{id, email, displayName}` and a signed-in session. 403 `REGISTRATION_DISABLED` when `APIFORGE_AUTH_REGISTRATION_ENABLED=false`; 409 `EMAIL_TAKEN`; 400 with `errors[]` for invalid fields or a password rejected by policy |
+| POST | `/auth/login` | *public*. `{email, password}` → 200 user. New session id and new CSRF token on success. Every failure is 401 `BAD_CREDENTIALS` with the same message (unknown e-mail, wrong password, locked account) |
+| POST | `/auth/logout` | 204. Invalidates the server session, clears the session cookie and rotates the CSRF token. Requires the CSRF header |
+| GET | `/auth/me` | Current user `{id, email, displayName}`; 401 `UNAUTHENTICATED` without a session |
 
-### 2.2 Projects — Phase 2
+Rules (details in [SECURITY.md](SECURITY.md) §3): passwords 12–64 characters and ≤ 72 bytes, not in the common-password list, not containing the e-mail address; e-mail normalized to lower case; 5 consecutive failures lock sign-in for 15 minutes; per-IP limits of 10 sign-ins and 5 registrations per minute (429 `RATE_LIMITED` + `Retry-After`); sessions expire after 30 minutes idle and 12 hours absolute.
+
+Planned (not implemented): `PATCH /users/me` (display name) and `POST /users/me/password`.
+
+### 2.2 Projects — Phase 2 ✅ implemented
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/projects` | Paged list of own projects (`?archived=false`) |
-| POST | `/projects` | `{name, description}` → 201 |
-| GET | `/projects/{projectId}` | Detail including active spec summary |
-| PATCH | `/projects/{projectId}` | `{name?, description?, archived?}` with `version` for optimistic locking |
-| DELETE | `/projects/{projectId}` | Hard delete, cascading (UI requires typed confirmation) → 204 |
+| GET | `/projects` | Own projects only, paged. `?archived=false\|true` (default `false`), `?q=` case-insensitive name search (`%` and `_` are literal), `?sort=name\|createdAt\|updatedAt,asc\|desc` (default `updatedAt,desc`; other properties → 400), `?page=`, `?size=` (default 20, capped at 100) |
+| POST | `/projects` | `{name, description?}` → 201 + `Location`. Name 1–100 characters, trimmed, no control characters; description ≤ 2000. 409 `DUPLICATE_NAME` if an active project of yours has the same name (case-insensitive) |
+| GET | `/projects/{projectId}` | `{id, name, description, archived, archivedAt, activeSpecificationVersionId, createdAt, updatedAt, version}` |
+| PATCH | `/projects/{projectId}` | `{version, name?, description?, archived?}`. `version` is required: a mismatch gives 409 `STALE_VERSION`. An empty description clears it. Restoring an archived project whose name is now taken gives 409 `DUPLICATE_NAME` |
+| DELETE | `/projects/{projectId}` | 204. Permanently deletes the project and, through database cascades, all its specifications, environments, tests and history (the UI requires typing the name) |
 
-### 2.3 Specifications and operations — Phase 2
+A project owned by someone else returns exactly the same 404 as a non-existent one; the attempt is recorded as a `CROSS_USER_ACCESS_DENIED` audit event.
+
+### 2.3 Specifications and operations — Phase 3
 
 | Method | Path | Description |
 |---|---|---|
@@ -107,7 +111,18 @@
 | DELETE | `/projects/{projectId}/environments/{envId}/variables/{name}` | Remove variable |
 | POST | `/projects/{projectId}/environments/{envId}/connectivity-check` | Guarded `GET` of the base URL; reports reachability and timing, never the body |
 
-### 2.5 Execution — Phase 3 (ad hoc), Phase 5 (runs of test cases)
+### 2.5a Execution history (read-only) — Phase 2 ✅ implemented
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/projects/{projectId}/runs` | Paged runs, newest first (`?sort=createdAt\|startedAt\|finishedAt\|status`). Each run: status, environment name/base URL snapshots, outcome counts, timestamps |
+| GET | `/projects/{projectId}/runs/{runId}` | One run |
+| GET | `/projects/{projectId}/runs/{runId}/results` | Paged result summaries (`?sort=executedAt\|outcome\|durationMs`, default `executedAt,asc`) |
+| GET | `/projects/{projectId}/runs/{runId}/results/{resultId}` | Full result: request snapshot, response, checks, error kind and message |
+
+Runs and results are always resolved through the project and run in the path, so an id from another project returns 404. Runs are created by the execution engine (Phase 4/5); until then the history is empty.
+
+### 2.5 Execution — Phase 4 (ad hoc), Phase 5 (runs of test cases)
 
 | Method | Path | Description |
 |---|---|---|
