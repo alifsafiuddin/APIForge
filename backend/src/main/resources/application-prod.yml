@@ -1,0 +1,13 @@
+# Production profile. Required values have no defaults, so a missing variable stops startup
+# instead of silently falling back to a development value.
+
+spring:
+  datasource:
+    url: ${APIFORGE_DB_URL}
+    username: ${APIFORGE_DB_USER}
+    password: ${APIFORGE_DB_PASSWORD}
+
+logging:
+  structured:
+    format:
+      console: ecs

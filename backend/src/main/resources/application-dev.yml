@@ -1,0 +1,17 @@
+# Local development profile (activated by `./mvnw spring-boot:run`).
+# Reads the repository-root .env file so the backend and Docker Compose share one set of
+# local settings. The file is optional and git-ignored; see .env.example.
+
+spring:
+  config:
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
+
+apiforge:
+  cors:
+    allowed-origins: ${APIFORGE_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+
+logging:
+  level:
+    com.apiforge: DEBUG

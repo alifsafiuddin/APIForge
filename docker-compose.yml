@@ -1,0 +1,30 @@
+# Local infrastructure for APIForge AI.
+# Phase 1 provides PostgreSQL only; the backend and frontend run from source (see README.md).
+# Settings come from `.env` (copy `.env.example`).
+
+name: apiforge
+
+services:
+  postgres:
+    # Keep in sync with <postgres.image> in backend/pom.xml (used by Testcontainers).
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${APIFORGE_DB_NAME:-apiforge}
+      POSTGRES_USER: ${APIFORGE_DB_USER:-apiforge}
+      POSTGRES_PASSWORD: ${APIFORGE_DB_PASSWORD:?Set APIFORGE_DB_PASSWORD in .env (copy .env.example)}
+    ports:
+      # Bound to loopback only: the database is not reachable from other machines.
+      - "127.0.0.1:${APIFORGE_DB_PORT:-5432}:5432"
+    volumes:
+      # PostgreSQL 18 images store data under /var/lib/postgresql/<major>/; mount the parent.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  pgdata:
