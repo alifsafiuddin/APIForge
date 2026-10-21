@@ -227,11 +227,12 @@ React SPA (Vite, TypeScript 6.0, Tailwind CSS 4, shadcn/ui on Radix primitives, 
 | `/projects/:projectId/spec` | Specification explorer ✅ | Version selector (activate older versions), searchable endpoint index grouped by tag with method filters, version overview (servers, security schemes, tags, import findings, original download), import dialog (upload or paste, dry-run check) |
 | `/projects/:projectId/spec/operations/:operationId` | Endpoint detail ✅ | Parameters by location, request body and responses per media type with an expandable schema viewer (references, enums, nullable, required, constraints, recursion), effective security, import warnings; later: tests for this endpoint and ad hoc send |
 | `/projects/:projectId/tests` | Test generation workspace ✅ | Generate and regenerate deterministic tests, with a report (created, updated, unchanged, kept edits, archived, skipped with reasons). An endpoint index shows enabled/total counts; each endpoint lists its tests with category, state and suite filters and bulk enable, disable or move. The test panel shows why the test exists, its expected outcome and response checks, the request and its provenance, with enable, move, review and edit. Also a suites dialog and "not generated" reasons per endpoint. Later: AI suggestions review queue |
-| `/projects/:projectId/runs` | Execution history | Filterable list of runs |
-| `/projects/:projectId/runs/:runId` | Test execution results + contract validation report | Per-test outcomes, findings grouped by rule/severity |
+| `/projects/:projectId/runs` | Execution history ✅ | Runs and console requests, newest first, with outcome counts; refreshes while a run is active |
+| `/projects/:projectId/runs/:runId` | Run results ✅ | Live progress, cancel, per-test outcomes; result panel with checks, redacted request and response, correlation id. Later: contract validation findings |
+| `/projects/:projectId/console` | Console ✅ | One request through the same guarded engine (method, path, query, headers, body, auth mode, expected statuses) |
 | `/projects/:projectId/executions/:executionId` | Execution detail + AI failure assistant | Request/response (redacted), findings, explain panel |
 | `/projects/:projectId/coverage` | Coverage report | Metrics with definitions, untested endpoints/responses, missing negatives |
-| `/projects/:projectId/environments` | Environment configuration | Base URL, auth, variables (secrets write-only), execution policy |
+| `/projects/:projectId/environments` | Environment configuration ✅ | Base URL, timeout, redirects, execution policy (confirmation above read-only), auth, default headers, variables (secrets write-only); authorization notice on first creation |
 | `/settings` | Settings | Profile, password, AI status/model info |
 
 Layout: left sidebar (global: Overview, Projects, Settings; project-scoped section when inside a project), top bar with project switcher and user menu; collapses to a drawer below the `md` breakpoint.

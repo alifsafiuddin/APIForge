@@ -25,7 +25,16 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 public class TestRun {
 
     public enum Status {
-        QUEUED, RUNNING, COMPLETED, CANCELLED, INTERRUPTED
+        QUEUED, RUNNING, COMPLETED, CANCELLED, INTERRUPTED;
+
+        public boolean isFinished() {
+            return this == COMPLETED || this == CANCELLED || this == INTERRUPTED;
+        }
+    }
+
+    /** TEST_RUN executes stored test cases; AD_HOC is one request sent from the console. */
+    public enum Kind {
+        TEST_RUN, AD_HOC
     }
 
     @Id
@@ -56,6 +65,13 @@ public class TestRun {
 
     @Column(name = "base_url_snapshot", length = 2048)
     private String baseUrlSnapshot;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "kind", nullable = false, length = 20)
+    private Kind kind = Kind.TEST_RUN;
+
+    @Column(name = "status_reason", length = 500)
+    private String statusReason;
 
     @Column(name = "total_count", nullable = false)
     private int totalCount;
@@ -98,6 +114,16 @@ public class TestRun {
         this.totalCount = totalCount;
     }
 
+    /** A run created by the execution engine, recording what it ran against. */
+    public static TestRun started(Kind kind, UUID projectId, UUID environmentId, String environmentName, String baseUrl,
+            UUID suiteId, UUID specificationVersionId, UUID triggeredBy, int totalCount) {
+        TestRun run = new TestRun(projectId, environmentId, environmentName, baseUrl, triggeredBy, totalCount);
+        run.kind = kind;
+        run.suiteId = suiteId;
+        run.specificationVersionId = specificationVersionId;
+        return run;
+    }
+
     public void start(Instant now) {
         status = Status.RUNNING;
         startedAt = now;
@@ -114,8 +140,25 @@ public class TestRun {
     }
 
     public void finish(Status finalStatus, Instant now) {
+        finish(finalStatus, null, now);
+    }
+
+    /** @param reason why the run ended this way (cancelled, interrupted), or {@code null} */
+    public void finish(Status finalStatus, String reason, Instant now) {
         status = finalStatus;
-        finishedAt = now;
+        statusReason = reason;
+        if (startedAt == null) {
+            startedAt = now.isBefore(createdAt) ? createdAt : now;
+        }
+        finishedAt = now.isBefore(startedAt) ? startedAt : now;
+    }
+
+    public Kind getKind() {
+        return kind;
+    }
+
+    public String getStatusReason() {
+        return statusReason;
     }
 
     public UUID getId() {

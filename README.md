@@ -2,16 +2,15 @@
 
 A full-stack developer tool for **contract-driven API testing**. You import an OpenAPI 3.x specification, explore its endpoints, and generate deterministic test scenarios from its schemas. APIForge AI then runs them against an API you are authorized to test, validates every response against the documented contract, tracks specification coverage, and can ask a **locally hosted** LLM (Ollama) to explain failures.
 
-> **Status: Phase 4 (deterministic test generation) complete.**
+> **Status: Phase 5 (secure execution engine) complete.**
 > What runs today:
-> - Registration and sign-in: sessions, CSRF, lockout, rate limiting, audit trail.
-> - Private API projects.
-> - **OpenAPI 3.0/3.1 import**: file upload or pasted JSON/YAML, strict validation with readable findings, immutable versions, no outbound requests.
-> - A **specification explorer**.
-> - **Deterministic test generation** (no AI): valid requests; missing fields and parameters; wrong types; enum, boundary, string-length and array-length violations; unsupported content type; and authentication checks. Every test has an explicit expected outcome, documented response-schema checks and the reason it exists. Regeneration is repeatable and keeps your edits.
-> - A **test workspace** to review, edit, enable/disable and organize tests into suites.
+> - Registration and sign-in (sessions, CSRF, lockout, rate limiting, audit trail) and private API projects.
+> - **OpenAPI 3.0/3.1 import** with immutable versions and a **specification explorer**.
+> - **Deterministic test generation** with a review and curation workspace.
+> - **Environments**: base URL, timeouts, redirects, execution policy, authentication (bearer, basic, API key), default headers, variables; secret variables are AES-256-GCM encrypted and write-only.
+> - **Secure execution**: test runs (asynchronous, cancellable, per-user limits) and a console for single requests, against an API you are authorized to test. Private, loopback, link-local, multicast and cloud metadata destinations are blocked, DNS is validated before connecting (rebinding-safe), every redirect is re-checked, and secrets are redacted from everything that is stored, returned or logged.
 >
-> Test execution, contract validation, coverage and AI are **not implemented yet**, so generated tests cannot be run yet. See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
+> Contract validation of response bodies, coverage and AI are **not implemented yet**. See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
 ## Quick start
 
@@ -64,6 +63,8 @@ To try the explorer: create a project, open it, choose **Import specification** 
 
 To try test generation: import [`samples/warehouse-lab-openapi.yaml`](samples/), a constraint-rich sample with 7 endpoints, then open the project's **Tests** tab and choose **Generate tests**. The report lists what was created and every scenario that was skipped, with the reason. Pick an endpoint to see its tests; open one to see why it exists, what it sends and what it expects. You can edit, disable or move it to another suite. **Regenerate tests** creates no duplicates and leaves your edits in place.
 
+To execute tests: start the local sample API with `node samples/warehouse-lab-server.mjs` (it listens on `127.0.0.1:8090`, the only destination the dev profile trusts). On **Environments**, create an environment with base URL `http://127.0.0.1:8090`, authentication *API key in a header* (`X-API-Key`, variable `API_KEY`), and add the secret variable `API_KEY` = `lab-demo-key`. Then use **Run** on the Tests tab, follow the run under **Runs**, or send single requests from the **Console** (for example `/lab/slow`, `/lab/malformed` or `/lab/redirect-metadata` to see timeouts, malformed responses and blocked redirects).
+
 The Vite dev server proxies `/api` and `/actuator` to the backend, so the browser only talks to one origin and the session cookie stays first-party.
 
 ## Commands
@@ -97,7 +98,10 @@ All `/api/v1/**` endpoints require a signed-in session unless marked public. Sta
 | `POST /api/v1/projects/{id}/tests/generate`, `GET …/tests/generation-plan?operationKey=` | Generate tests from the active version (report with skipped scenarios and reasons) / preview one operation |
 | `GET /api/v1/projects/{id}/tests[/summary\|/{testId}]`, `PUT, PATCH …/tests/{testId}`, `POST …/tests/bulk`, `POST …/tests/{testId}/review` | List and filter tests, counts per operation, detail; edit, enable/disable or move; bulk changes; approve/reject |
 | `GET, POST /api/v1/projects/{id}/test-suites`, `PATCH, DELETE …/test-suites/{suiteId}` | Suites (only empty custom suites can be deleted) |
-| `GET /api/v1/projects/{id}/runs[/{runId}[/results[/{resultId}]]]` | Execution history (read-only; populated once test execution exists) |
+| `GET, POST /api/v1/projects/{id}/environments`; `GET, PUT, DELETE …/environments/{envId}`; `PUT, DELETE …/variables/{name}` | Environments and variables (secrets write-only) |
+| `POST /api/v1/projects/{id}/runs`, `POST …/runs/{runId}/cancel` | Start a run of tests (202, poll the run) / cancel it |
+| `POST /api/v1/projects/{id}/executions` | Send one request now (console) |
+| `GET /api/v1/projects/{id}/runs[/{runId}[/results[/{resultId}]]]` | Run history and results (redacted request and response, checks) |
 
 Every response carries an `X-Request-Id` header. Errors use `application/problem+json` with a stable `code`.
 
@@ -114,6 +118,9 @@ Every response carries an `X-Request-Id` header. Errors use `application/problem
 | `APIFORGE_COOKIE_SECURE` | `false` (`true` in `prod`) | `Secure` flag on session and CSRF cookies; required over HTTPS |
 | `APIFORGE_SESSION_IDLE_TIMEOUT` / `APIFORGE_SESSION_ABSOLUTE_TIMEOUT` | `30m` / `12h` | Session lifetime |
 | `APIFORGE_SPEC_MAX_SIZE` | `5MB` | Maximum OpenAPI document size |
+| `APIFORGE_SECRETS_KEY` | dev-only key in `dev`; *(required)* otherwise | Base64 of 32 random bytes; encrypts secret variables (AES-256-GCM). The public dev key is refused by `prod` |
+| `APIFORGE_OUTBOUND_CONNECT_TIMEOUT` / `APIFORGE_OUTBOUND_TOTAL_DEADLINE` | `5s` / `30s` | Connect timeout and whole-request deadline for test execution (bounded: 30 s / 3 min) |
+| `APIFORGE_OUTBOUND_ALLOW_TRUSTED_IN_PROD` | `false` | Acknowledgement needed to use trusted local targets with the `prod` profile |
 | `APIFORGE_BACKEND_URL` (frontend) | `http://localhost:8081` | Where the Vite dev server proxies API calls |
 | `VITE_API_BASE_URL` (frontend) | empty | Set only to call the backend cross-origin instead of through the proxy |
 

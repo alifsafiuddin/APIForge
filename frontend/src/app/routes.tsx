@@ -10,6 +10,10 @@ import { OperationDetailView } from '@/features/specs/OperationDetailView'
 import { SpecificationPage } from '@/features/specs/SpecificationPage'
 import { SpecOverview } from '@/features/specs/SpecOverview'
 import { TestsPage } from '@/features/tests/TestsPage'
+import { EnvironmentsPage } from '@/features/environments/EnvironmentsPage'
+import { ConsolePage } from '@/features/runs/ConsolePage'
+import { RunDetailPage } from '@/features/runs/RunDetailPage'
+import { RunsPage } from '@/features/runs/RunsPage'
 
 import { AppShell } from './layout/AppShell'
 import { NotFoundPage, RouteErrorPage } from './RouteErrorPage'
@@ -55,6 +59,10 @@ export const routes: RouteObject[] = [
                 ],
               },
               { path: 'tests', element: <TestsPage /> },
+              { path: 'environments', element: <EnvironmentsPage /> },
+              { path: 'runs', element: <RunsPage /> },
+              { path: 'runs/:runId', element: <RunDetailPage /> },
+              { path: 'console', element: <ConsolePage /> },
             ],
           },
           { path: '*', element: <NotFoundPage /> },

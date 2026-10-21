@@ -107,6 +107,25 @@ apiforge:
     max-operations: 2000
     max-nesting-depth: 100
     max-yaml-aliases: 50
+  secrets:
+    # Base64 of 32 random bytes (e.g. `openssl rand -base64 32`). No default: startup fails without it.
+    key: ${APIFORGE_SECRETS_KEY:}
+    key-id: ${APIFORGE_SECRETS_KEY_ID:k1}
+  outbound:
+    # Deployed environments never trust local or private destinations (docs/SECURITY.md section 6.3).
+    trusted-targets-enabled: false
+    allow-trusted-in-production: ${APIFORGE_OUTBOUND_ALLOW_TRUSTED_IN_PROD:false}
+    connect-timeout: ${APIFORGE_OUTBOUND_CONNECT_TIMEOUT:5s}
+    max-read-timeout: 60s
+    total-deadline: ${APIFORGE_OUTBOUND_TOTAL_DEADLINE:30s}
+    max-response-size: 2MB
+    stored-body-size: 256KB
+    max-request-size: 1MB
+    max-redirects: 5
+    max-concurrent-runs-per-user: 2
+    max-concurrent-runs: 8
+    requests-per-minute-per-user: 300
+    max-tests-per-run: 500
 
 logging:
   pattern:

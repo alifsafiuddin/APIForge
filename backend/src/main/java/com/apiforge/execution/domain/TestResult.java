@@ -33,7 +33,7 @@ public class TestResult {
 
     public enum ErrorKind {
         TIMEOUT, CONNECT_FAILED, DNS_FAILURE, TLS_ERROR, BLOCKED_BY_POLICY, RESPONSE_TOO_LARGE,
-        INVALID_RESPONSE, REDIRECT_BLOCKED, VARIABLE_UNRESOLVED, INTERNAL
+        INVALID_RESPONSE, REDIRECT_BLOCKED, VARIABLE_UNRESOLVED, CANCELLED, INTERNAL
     }
 
     /** Response data of an execution that received an HTTP response. */
@@ -102,6 +102,9 @@ public class TestResult {
     @Column(name = "executed_at", nullable = false)
     private Instant executedAt;
 
+    @Column(name = "correlation_id", length = 64)
+    private String correlationId;
+
     protected TestResult() {
     }
 
@@ -146,6 +149,25 @@ public class TestResult {
         result.errorKind = errorKind;
         result.errorMessage = errorMessage;
         return result;
+    }
+
+    /** A test that was not executed (policy, cancellation); {@code reason} says why. */
+    public static TestResult skipped(UUID testRunId, UUID testCaseId, String operationKey,
+            Map<String, Object> testCaseSnapshot, Map<String, Object> requestSnapshot, String reason, Instant executedAt) {
+        TestResult result = new TestResult(testRunId, testCaseId, operationKey, testCaseSnapshot, requestSnapshot,
+                Outcome.SKIPPED, List.of(), null, executedAt);
+        result.errorMessage = reason;
+        return result;
+    }
+
+    /** Sets the id sent to the target as the correlation header (before the result is stored). */
+    public TestResult correlatedWith(String id) {
+        this.correlationId = id;
+        return this;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
     }
 
     public UUID getId() {

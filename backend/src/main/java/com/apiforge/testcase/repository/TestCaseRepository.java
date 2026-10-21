@@ -21,6 +21,17 @@ public interface TestCaseRepository extends JpaRepository<TestCase, UUID>, JpaSp
 
     List<TestCase> findByProjectIdAndIdIn(UUID projectId, Collection<UUID> ids);
 
+    /** Tests that may run: enabled, approved and active, in workspace order. */
+    @Query("""
+            select t from TestCase t
+            where t.projectId = :projectId
+              and t.enabled = true
+              and t.reviewStatus = com.apiforge.testcase.domain.TestCase.ReviewStatus.APPROVED
+              and t.lifecycleStatus = com.apiforge.testcase.domain.TestCase.LifecycleStatus.ACTIVE
+            order by t.operationKey, t.sortOrder, t.name
+            """)
+    List<TestCase> findExecutable(@Param("projectId") UUID projectId);
+
     /** Live tests of one origin (archived ones are history, not candidates for regeneration). */
     @Query("""
             select t from TestCase t

@@ -13,6 +13,9 @@ import { useProject } from './api'
 const SECTIONS = [
   { to: 'spec', label: 'Specification' },
   { to: 'tests', label: 'Tests' },
+  { to: 'environments', label: 'Environments' },
+  { to: 'runs', label: 'Runs' },
+  { to: 'console', label: 'Console' },
 ]
 
 /** Frame for one project: breadcrumb, title and section navigation. */
@@ -50,14 +53,14 @@ export function ProjectLayout() {
           <p className="max-w-3xl text-sm whitespace-pre-wrap text-muted-foreground">{project.data.description}</p>
         ) : null}
       </div>
-      <nav aria-label="Project sections" className="flex gap-1 border-b">
+      <nav aria-label="Project sections" className="flex gap-1 overflow-x-auto border-b">
         {SECTIONS.map((section) => (
           <NavLink
             key={section.to}
             to={section.to}
             className={({ isActive }) =>
               cn(
-                '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+                '-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors',
                 isActive ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
               )
             }

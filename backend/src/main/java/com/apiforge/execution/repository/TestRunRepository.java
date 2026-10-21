@@ -1,5 +1,7 @@
 package com.apiforge.execution.repository;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -14,4 +16,6 @@ public interface TestRunRepository extends JpaRepository<TestRun, UUID> {
     Page<TestRun> findByProjectId(UUID projectId, Pageable pageable);
 
     Optional<TestRun> findByIdAndProjectId(UUID id, UUID projectId);
+
+    List<TestRun> findByStatusIn(Collection<TestRun.Status> statuses);
 }

@@ -12,6 +12,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.apiforge.common.error.ApiException;
+import com.apiforge.common.http.HeaderRules;
 import com.apiforge.common.error.ErrorCode;
 import com.apiforge.common.error.Problems.FieldErrorItem;
 import com.apiforge.testcase.domain.Expectations;
@@ -46,14 +47,9 @@ public final class TestDefinitionValidator {
     static final int MAX_LIST_ITEMS = 100;
 
     private static final Pattern PATH_VARIABLE = Pattern.compile("\\{([^}/]+)}");
-    private static final Pattern HEADER_NAME = Pattern.compile("^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,100}$");
     private static final Pattern MEDIA_TYPE = Pattern.compile(
             "^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,126}/[A-Za-z0-9*][A-Za-z0-9!#$&^_.+*-]{0,126}(\\s*;[^\\p{Cntrl}]{0,200})?$");
     private static final Pattern STATUS = Pattern.compile("^[1-5]([0-9]{2}|XX)$");
-    /** Set by the HTTP client or the environment, never by a test. */
-    private static final Set<String> FORBIDDEN_HEADERS = Set.of("host", "content-length", "transfer-encoding",
-            "connection", "keep-alive", "upgrade", "te", "trailer", "expect", "content-type", "authorization", "cookie",
-            "proxy-authorization", "proxy-connection");
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private final List<FieldErrorItem> errors = new ArrayList<>();
@@ -61,14 +57,14 @@ public final class TestDefinitionValidator {
     private TestDefinitionValidator() {
     }
 
-    record Validated(RequestTemplate request, Expectations expectations) {
+    public record Validated(RequestTemplate request, Expectations expectations) {
     }
 
     /**
      * @param operationKey     the test's operation ("GET /pets/{id}"); its path variables must all be set
      * @param existingChecks   documented response checks, kept for the statuses that remain expected
      */
-    static Validated validate(String operationKey, RequestInput request, ExpectationsInput expectations,
+    public static Validated validate(String operationKey, RequestInput request, ExpectationsInput expectations,
             List<Expectations.ResponseCheck> existingChecks) {
         TestDefinitionValidator validator = new TestDefinitionValidator();
         RequestTemplate template = validator.request(operationKey, request);
@@ -155,15 +151,13 @@ public final class TestDefinitionValidator {
         Set<String> seen = new HashSet<>();
         headers.forEach((name, value) -> {
             String field = "request.headers." + name;
-            String lower = name == null ? "" : name.toLowerCase(Locale.ROOT);
-            if (name == null || !HEADER_NAME.matcher(name).matches()) {
+            if (!HeaderRules.isValidName(name)) {
                 error("request.headers", "header names must be HTTP tokens of 1–100 characters");
-            } else if (FORBIDDEN_HEADERS.contains(lower) || lower.startsWith("proxy-")) {
+            } else if (HeaderRules.isForbidden(name)) {
                 error(field, "cannot be set by a test (it comes from the HTTP client, the body or the environment)");
-            } else if (!seen.add(lower)) {
+            } else if (!seen.add(name.toLowerCase(Locale.ROOT))) {
                 error(field, "is set more than once");
-            } else if (value == null || value.length() > MAX_VALUE_LENGTH
-                    || value.chars().anyMatch(c -> c == '\r' || c == '\n' || c == 0)) {
+            } else if (!HeaderRules.isValidValue(value)) {
                 error(field, "must be at most %d characters without line breaks".formatted(MAX_VALUE_LENGTH));
             } else {
                 result.put(name, value);

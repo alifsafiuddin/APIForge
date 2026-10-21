@@ -86,7 +86,7 @@ ADR-008 records why session + CSRF was chosen over JWT in `localStorage`.
 | XSS through descriptions, summaries, examples | The explorer renders every spec-supplied string as text (no HTML, Markdown shown verbatim); covered by oxlint `react/no-danger` and a component test that injects markup | `SchemaView.test.tsx` ("treats description text as text, not markup") |
 | Downloaded original rendered by the browser | Served as `text/plain` with `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff` | `originalDocumentIsStoredByteForByte` |
 
-## 6. Outbound request safety (SSRF) — the `outbound` module
+## 6. Outbound request safety (SSRF) — the `outbound` module ✅ Phase 5
 
 All user-influenced outbound HTTP (test execution, ad hoc requests, connectivity checks) goes through one client, `OutboundHttpClient`. It is built on Apache HttpClient 5 with a **guarded DNS resolver**. No other code may make outbound requests to user-supplied destinations (enforced by ArchUnit).
 
@@ -157,9 +157,9 @@ apiforge:
 | Max request body | 1 MB | yes |
 | Max redirects | 5 (off by default per environment) | yes |
 | Max headers in response | 100, 16 KB total | yes |
-| Concurrent executions | per user 4, global 32 | yes |
+| Concurrent executions (runs and console requests) | per user 2, global 8 runs | yes (≤ 16 / 64) |
 | Run size | 500 tests per run | yes |
-| Execution rate | 300 requests/min per user | yes |
+| Execution rate | 300 requests/min per user (runs wait, console requests get 429) | yes |
 
 Other client settings:
 
@@ -168,6 +168,7 @@ Other client settings:
 - Header names and values are validated: CRLF is rejected; `Host`, `Content-Length`, `Transfer-Encoding`, `Connection` and other hop-by-hop headers cannot be set by tests.
 - On a cross-origin redirect, `Authorization`, `Cookie` and auth query parameters are removed.
 - TLS: default JVM trust store and hostname verification. No "trust all" option.
+- Implementation notes (Phase 5, ADR-026): the client's `DnsResolver` never looks anything up itself; it returns the addresses the policy validated for the request on that thread and refuses every other name. After connecting, the peer address is classified again. Internationalized host names must be given in punycode, so only one parser ever interprets a host. Ports below 1024 other than 80 and 443 are refused unless the target is trusted. Error messages name the rule, never internal addresses, and the outbound log line contains method, host, port, path (no query), status or error kind, duration and the correlation id.
 
 ### 6.5 Execution policy (safe negative testing)
 
@@ -184,8 +185,8 @@ Other client settings:
 |---|---|
 | Encryption at rest | ✅ Phase 2 (schema): the database refuses to store a secret variable in plaintext (`ck_environment_variables_storage`). Phase 3 (cipher): secret variables are encrypted with AES-256-GCM. Key from `APIFORGE_SECRETS_KEY` (base64, 32 bytes). Startup fails in prod if missing; the dev profile uses a documented dev-only key. A `key_id` column allows rotation |
 | Write-only | The API never returns secret values, only `hasValue: true` |
-| Redaction | `Redactor` replaces known secret values (exact match, plus URL-encoded and Base64 forms for Basic auth) and sensitive headers (`Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `X-API-Key`, and any header configured as an API key header) with `«redacted»`. It runs **before** persisting request and response snapshots, before logging, and before building AI prompts |
-| Logging | No bodies, header values or variable values at INFO and above. Request logging includes method, host, path template, status, duration and request id. A log-capture test asserts that a planted secret never appears in logs |
+| Redaction ✅ Phase 5 | `Redactor` replaces known secret values (exact match, plus URL-encoded and Base64 forms for Basic auth) and sensitive headers (`Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `X-API-Key`, and any header configured as an API key header) with `«redacted»`. It runs **before** persisting request and response snapshots, before logging, and before building AI prompts |
+| Logging ✅ Phase 5 | No bodies, header values or variable values at INFO and above. Request logging includes method, host, path template, status, duration and request id. A log-capture test asserts that a planted secret never appears in logs |
 | AI context | Built only from redacted snapshots. Bodies truncated to 8 KB. Never includes environment variables or auth config |
 
 ## 8. AI-specific threats

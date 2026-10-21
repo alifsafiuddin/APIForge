@@ -1,4 +1,4 @@
-import { FlaskConical, FolderCog, ListChecks, Search, Sparkles } from 'lucide-react'
+import { FlaskConical, FolderCog, ListChecks, Play, Search, Sparkles } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
@@ -13,6 +13,7 @@ import { useProject } from '@/features/projects/api'
 import { type OperationSummary, useOperations } from '@/features/specs/api'
 import { MethodBadge, StatusBadge } from '@/features/specs/components/MethodBadge'
 import { matchesQuery } from '@/features/specs/operation-filter'
+import { RunTestsDialog } from '@/features/runs/RunTestsDialog'
 import { cn } from '@/lib/utils'
 
 import {
@@ -299,6 +300,7 @@ function OperationTests({
   const [state, setState] = useState<'' | 'enabled' | 'disabled'>('')
   const [suiteId, setSuiteId] = useState('')
   const [selected, setSelected] = useState<string[]>([])
+  const [running, setRunning] = useState(false)
   const suites = useSuites(projectId)
   const tests = useTests(projectId, {
     operationKey,
@@ -339,8 +341,21 @@ function OperationTests({
           ← Endpoints
         </Button>
         <MethodBadge method={method} />
-        <h2 className="min-w-0 truncate font-mono text-sm font-medium">{path}</h2>
+        <h2 className="min-w-0 flex-1 truncate font-mono text-sm font-medium">{path}</h2>
+        <Button size="sm" onClick={() => setRunning(true)}>
+          <Play aria-hidden="true" />
+          Run
+        </Button>
       </div>
+      {running ? (
+        <RunTestsDialog
+          projectId={projectId}
+          open={running}
+          onOpenChange={setRunning}
+          operationKey={operationKey}
+          selectedTestIds={visibleSelected}
+        />
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <select

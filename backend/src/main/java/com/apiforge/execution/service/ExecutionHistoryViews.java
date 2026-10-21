@@ -17,12 +17,13 @@ public final class ExecutionHistoryViews {
     public record OutcomeCounts(int total, int passed, int failed, int inconclusive, int error, int skipped) {
     }
 
-    public record RunView(UUID id, UUID projectId, TestRun.Status status, UUID environmentId, String environmentName,
-            String baseUrl, UUID suiteId, UUID specificationVersionId, UUID triggeredBy, OutcomeCounts counts,
-            Instant createdAt, Instant startedAt, Instant finishedAt) {
+    public record RunView(UUID id, UUID projectId, TestRun.Kind kind, TestRun.Status status, String statusReason,
+            UUID environmentId, String environmentName, String baseUrl, UUID suiteId, UUID specificationVersionId,
+            UUID triggeredBy, OutcomeCounts counts, Instant createdAt, Instant startedAt, Instant finishedAt) {
 
-        static RunView from(TestRun run) {
-            return new RunView(run.getId(), run.getProjectId(), run.getStatus(), run.getEnvironmentId(),
+        public static RunView from(TestRun run) {
+            return new RunView(run.getId(), run.getProjectId(), run.getKind(), run.getStatus(), run.getStatusReason(),
+                    run.getEnvironmentId(),
                     run.getEnvironmentNameSnapshot(), run.getBaseUrlSnapshot(), run.getSuiteId(),
                     run.getSpecificationVersionId(), run.getTriggeredBy(),
                     new OutcomeCounts(run.getTotalCount(), run.getPassedCount(), run.getFailedCount(),
@@ -33,12 +34,12 @@ public final class ExecutionHistoryViews {
 
     public record ResultSummary(UUID id, UUID testCaseId, String testName, String operationKey,
             TestResult.Outcome outcome, Integer responseStatus, Integer durationMs, TestResult.ErrorKind errorKind,
-            Instant executedAt) {
+            String errorMessage, Instant executedAt) {
 
         static ResultSummary from(TestResult result) {
             return new ResultSummary(result.getId(), result.getTestCaseId(), snapshotName(result),
                     result.getOperationKey(), result.getOutcome(), result.getResponseStatus(),
-                    result.getDurationMs(), result.getErrorKind(), result.getExecutedAt());
+                    result.getDurationMs(), result.getErrorKind(), result.getErrorMessage(), result.getExecutedAt());
         }
     }
 
@@ -46,9 +47,9 @@ public final class ExecutionHistoryViews {
     public record ResultDetail(UUID id, UUID testRunId, UUID testCaseId, String testName, String operationKey,
             TestResult.Outcome outcome, Map<String, Object> request, ResponseView response,
             List<Map<String, Object>> checks, TestResult.ErrorKind errorKind, String errorMessage, Integer durationMs,
-            Instant executedAt) {
+            String correlationId, Map<String, Object> testCase, Instant executedAt) {
 
-        static ResultDetail from(TestResult result) {
+        public static ResultDetail from(TestResult result) {
             ResponseView response = result.getResponseStatus() == null ? null
                     : new ResponseView(result.getResponseStatus(), result.getResponseHeaders(),
                             result.getResponseBody(), result.getResponseSizeBytes(), result.isResponseTruncated(),
@@ -56,7 +57,7 @@ public final class ExecutionHistoryViews {
             return new ResultDetail(result.getId(), result.getTestRunId(), result.getTestCaseId(), snapshotName(result),
                     result.getOperationKey(), result.getOutcome(), result.getRequestSnapshot(), response,
                     result.getChecks(), result.getErrorKind(), result.getErrorMessage(), result.getDurationMs(),
-                    result.getExecutedAt());
+                    result.getCorrelationId(), result.getTestCaseSnapshot(), result.getExecutedAt());
         }
     }
 

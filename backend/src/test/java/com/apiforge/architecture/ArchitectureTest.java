@@ -65,4 +65,18 @@ class ArchitectureTest {
                     "org.yaml.snakeyaml..")
             .because("the application uses Jackson 3; Jackson 2, swagger-parser and SnakeYAML stay inside the "
                     + "OpenAPI adapter package (ADR-004, ADR-005)");
+
+    @ArchTest
+    static final ArchRule onlyTheOutboundModuleOpensHttpConnections = noClasses()
+            .that().resideOutsideOfPackage("com.apiforge.outbound..")
+            .should().dependOnClassesThat().resideInAnyPackage("org.apache.hc..", "java.net.http..")
+            .orShould().dependOnClassesThat().haveFullyQualifiedName("java.net.HttpURLConnection")
+            .orShould().dependOnClassesThat().haveFullyQualifiedName("java.net.Socket")
+            .because("every request to a user-supplied destination must pass the outbound policy (docs/SECURITY.md section 6)");
+
+    @ArchTest
+    static final ArchRule onlyTheSecretsModuleUsesCryptography = noClasses()
+            .that().resideOutsideOfPackage("com.apiforge.secrets..")
+            .should().dependOnClassesThat().resideInAPackage("javax.crypto..")
+            .because("secret values are encrypted and decrypted in one place (docs/SECURITY.md section 7)");
 }

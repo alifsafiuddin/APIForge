@@ -105,18 +105,17 @@ Base: `/projects/{projectId}/specs`. Every call requires owning the project (oth
 
 **Normalized operation content**: parameters are the effective set (path-level merged with operation-level, the operation wins on name + location) with `$ref`s to `components.parameters` resolved; request bodies, responses and response headers likewise; responses are ordered numerically with `default` last; `security` is the effective requirement list (an empty list means "no authentication"). Schema `$ref`s are kept and resolved against `/schemas`, which keeps recursive schemas finite.
 
-### 2.4 Environments — Phase 3
+### 2.4 Environments ✅ Phase 5
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/projects/{projectId}/environments` | List |
-| POST | `/projects/{projectId}/environments` | `{name, baseUrl, timeoutMs, followRedirects, executionPolicy, auth}` — `baseUrl` is syntax-checked and run through the destination policy (no DNS at save time; DNS is checked at execution) |
-| GET | `/projects/{projectId}/environments/{envId}` | Detail; variables listed as `{name, secret, value}` where `value` is `null` for secrets and `hasValue: true` is set instead |
-| PUT | `/projects/{projectId}/environments/{envId}` | Update |
-| DELETE | `/projects/{projectId}/environments/{envId}` | Delete (runs keep their snapshots) |
-| PUT | `/projects/{projectId}/environments/{envId}/variables/{name}` | `{value, secret}`. Upsert; a secret value is write-only |
-| DELETE | `/projects/{projectId}/environments/{envId}/variables/{name}` | Remove variable |
-| POST | `/projects/{projectId}/environments/{envId}/connectivity-check` | Guarded `GET` of the base URL; reports reachability and timing, never the body |
+| GET | `/projects/{projectId}/environments` | List with variables (secret values never included) |
+| POST | `/projects/{projectId}/environments` | `{name, baseUrl, timeoutMs, followRedirects, executionPolicy, authorizationConfirmed, auth, defaultHeaders}` → 201. `baseUrl` is parsed strictly (http/https, no credentials, no query, canonical IPs only) and checked against the destination policy without DNS (blocked names, literal addresses, ports); DNS is checked again at every execution. `executionPolicy` other than `READ_ONLY` requires `authorizationConfirmed: true`. `auth = {type: NONE \| BEARER \| BASIC \| API_KEY_HEADER \| API_KEY_QUERY, tokenVariable?, usernameVariable?, passwordVariable?, headerName?, parameterName?, valueVariable?}` names variables, never values. `defaultHeaders` follow the test header rules (no transport, Content-Type or credential headers; `{{VAR}}` allowed) |
+| GET | `/projects/{projectId}/environments/{envId}` | Detail; variables as `{name, secret, value, hasValue}` with `value: null` for secrets |
+| PUT | `/projects/{projectId}/environments/{envId}` | Same body plus `version` (optimistic locking, 409 `STALE_VERSION`); names unique per project (409 `DUPLICATE_NAME`) |
+| DELETE | `/projects/{projectId}/environments/{envId}` | 204; runs keep their environment name and base URL snapshots |
+| PUT | `/projects/{projectId}/environments/{envId}/variables/{name}` | `{value, secret}` upsert; secrets are encrypted (AES-256-GCM, bound to environment and name) and write-only; values ≤ 4096 characters without line breaks; audited as `SECRET_CHANGED` (name only) |
+| DELETE | `/projects/{projectId}/environments/{envId}/variables/{name}` | 204 |
 
 ### 2.5a Execution history (read-only) — Phase 2 ✅ implemented
 
@@ -127,18 +126,20 @@ Base: `/projects/{projectId}/specs`. Every call requires owning the project (oth
 | GET | `/projects/{projectId}/runs/{runId}/results` | Paged result summaries (`?sort=executedAt\|outcome\|durationMs`, default `executedAt,asc`) |
 | GET | `/projects/{projectId}/runs/{runId}/results/{resultId}` | Full result: request snapshot, response, checks, error kind and message |
 
-Runs and results are always resolved through the project and run in the path, so an id from another project returns 404. Runs are created by the execution engine (Phase 4/5); until then the history is empty.
+Runs and results are always resolved through the project and run in the path, so an id from another project returns 404. Runs are created by the execution engine (§2.5).
 
-### 2.5 Execution — Phase 4 (ad hoc), Phase 5 (runs of test cases)
+### 2.5 Execution ✅ Phase 5
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/projects/{projectId}/executions/ad-hoc` | `{environmentId, operationKey, request: {pathParams, query, headers, body}}`. Synchronous; creates a one-item run and returns the execution |
-| POST | `/projects/{projectId}/runs` | `{environmentId, testCaseIds?: [], operationKeys?: [], includeCategories?: []}` → `202 {runId}`. Rejects unapproved or rejected tests (`TEST_NOT_APPROVED`) and tests above the environment policy |
-| GET | `/projects/{projectId}/runs` | Paged history, filterable by `status`, `environmentId`, date |
-| GET | `/projects/{projectId}/runs/{runId}` | Run summary + execution list (outcome, duration, finding counts) |
-| POST | `/projects/{projectId}/runs/{runId}/cancel` | Cancel remaining executions → 202 |
-| GET | `/projects/{projectId}/executions/{executionId}` | Full detail: redacted request snapshot, response (headers, capped body), checks, findings |
+| POST | `/projects/{projectId}/runs` | `{environmentId, testIds?: [], operationKey?, suiteId?}` → **202** with the run (`QUEUED`) and a `Location`. Without `testIds` every runnable test (enabled, approved, active) is selected, optionally narrowed to an operation or suite; explicitly selected tests must all be runnable (else 400). At most 500 tests. Tests above the environment's execution policy are recorded as `SKIPPED` with the reason, never sent. More than 2 concurrent executions per user → 429 `RATE_LIMITED`. Audited (`RUN_STARTED`) |
+| POST | `/projects/{projectId}/runs/{runId}/cancel` | 202; aborts the request in flight (`ERROR/CANCELLED`) and records the remaining tests as `SKIPPED`; the run ends `CANCELLED`. A finished run → 409 |
+| POST | `/projects/{projectId}/executions` | `{environmentId, method, path, request: {query, headers, body, auth}, expectedStatuses?}` (path concrete, no query/fragment; `expectedStatuses` default `["2XX"]`). Synchronous; stored as a one-result `AD_HOC` run; returns the result detail. Method above the environment policy → 403 `EXECUTION_POLICY`; request budget (300/min per user) exhausted → 429 |
+| GET | `/projects/{projectId}/runs`, `/runs/{runId}`, `/runs/{runId}/results[/{resultId}]` | History (§2.5a). Runs include `kind` (`TEST_RUN`, `AD_HOC`) and `statusReason`; results include `correlationId`, the redacted request snapshot (method, URL, headers, body, auth mode, redirects followed), the redacted response (status, headers, text body up to 256 KB, size, truncation, content type), checks and the error kind |
+
+**Outcomes.** A response is evaluated with these checks: `STATUS` (against the expected codes or classes), `CONTENT_TYPE` (a documented JSON body must come back as JSON), `JSON_SYNTAX` (JSON bodies must parse; not evaluated when truncated) and `RESPONSE_SCHEMA`, which is reported `NOT_EVALUATED` until contract validation exists. Any `FAIL` → `FAILED`, otherwise `PASSED`. A request that got no usable response is `ERROR` with `TIMEOUT`, `CONNECT_FAILED`, `DNS_FAILURE`, `TLS_ERROR`, `BLOCKED_BY_POLICY`, `REDIRECT_BLOCKED`, `INVALID_RESPONSE`, `VARIABLE_UNRESOLVED`, `CANCELLED` or `INTERNAL`.
+
+**Correlation.** Every request carries `X-APIForge-Request-Id` (a dedicated name, so it never collides with headers the API under test documents); the same id is stored with the result and appears in APIForge's outbound log line.
 
 ### 2.6 Contract validation — Phase 4
 

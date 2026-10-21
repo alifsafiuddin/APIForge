@@ -52,7 +52,7 @@ flowchart LR
 | `APIFORGE_AI_TIMEOUT` | `120s` | — | Per-call timeout |
 | `APIFORGE_COOKIE_SECURE` | `false` (`true` in the `prod` profile) | `true` (served over HTTPS) | `Secure` flag on the session and CSRF cookies |
 
-Variables for later phases (secrets key, outbound, AI) are not read yet. `.env.example` documents every variable in use, with safe placeholders. `.env` is git-ignored. No secret is committed. The dev secrets key is labelled as dev-only and rejected by the `prod` profile.
+The secrets key and outbound settings are read since Phase 5; AI variables are not read yet. `.env.example` documents every variable in use, with safe placeholders. `.env` is git-ignored. No secret is committed. The dev secrets key is labelled as dev-only and rejected by the `prod` profile.
 
 ## 4. Profiles
 
