@@ -47,6 +47,11 @@ public class TestSuite extends AuditableEntity {
         this.kind = kind;
     }
 
+    public void rename(String newName, String newDescription) {
+        this.name = newName;
+        this.description = newDescription;
+    }
+
     public UUID getProjectId() {
         return projectId;
     }

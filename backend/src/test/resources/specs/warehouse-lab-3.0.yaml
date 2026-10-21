@@ -1,0 +1,408 @@
+openapi: 3.0.3
+info:
+  title: Warehouse Lab API
+  version: 1.0.0
+  description: >-
+    A small, constraint-rich API for exercising deterministic test generation: every common
+    data type, numeric bounds (inclusive and exclusive), multipleOf, string length, pattern,
+    formats, array length and uniqueness, enums, nullable and read-only fields, allOf, oneOf
+    with a discriminator, documented error schemas and API-key security.
+servers:
+  - url: http://localhost:8090
+security:
+  - apiKeyAuth: []
+tags:
+  - name: products
+  - name: orders
+  - name: system
+paths:
+  /health:
+    get:
+      tags: [system]
+      operationId: getHealth
+      summary: Liveness of the API (public)
+      security: []
+      responses:
+        '200':
+          description: The API is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [UP]
+  /products:
+    get:
+      tags: [products]
+      operationId: listProducts
+      summary: List products
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: category
+          in: query
+          schema:
+            $ref: '#/components/schemas/Category'
+        - name: q
+          in: query
+          description: Free-text search
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 50
+        - name: X-Request-Id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: A page of products
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [products]
+      operationId: createProduct
+      summary: Create a product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewProduct'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '415':
+          description: Unsupported media type
+        '422':
+          description: The product violates a business rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /products/{productId}:
+    parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 42
+    get:
+      tags: [products]
+      operationId: getProduct
+      summary: Get one product
+      responses:
+        '200':
+          description: The product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [products]
+      operationId: updateProduct
+      summary: Change some fields of a product
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/ProductPatch'
+      responses:
+        '200':
+          description: The updated product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [products]
+      operationId: deleteProduct
+      summary: Delete a product
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /orders:
+    post:
+      tags: [orders]
+      operationId: placeOrder
+      summary: Place an order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NewOrder'
+      responses:
+        '201':
+          description: The accepted order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Not enough stock
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  responses:
+    BadRequest:
+      description: The request is invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: No such resource
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Category:
+      type: string
+      enum: [tools, garden, kitchen]
+    Dimensions:
+      type: object
+      required: [widthCm, heightCm]
+      properties:
+        widthCm:
+          type: number
+          minimum: 0.1
+          maximum: 500
+        heightCm:
+          type: number
+          exclusiveMinimum: true
+          minimum: 0
+          maximum: 500
+    NewProduct:
+      type: object
+      required: [name, sku, price, category]
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 80
+          example: Cordless drill
+        sku:
+          type: string
+          pattern: '^[A-Z]{3}-[0-9]{4}$'
+          description: Stock keeping unit, e.g. TLS-0042
+        price:
+          type: number
+          exclusiveMinimum: true
+          minimum: 0
+          maximum: 100000
+          multipleOf: 0.01
+          example: 129.99
+        category:
+          $ref: '#/components/schemas/Category'
+        tags:
+          type: array
+          maxItems: 5
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 20
+        stock:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000
+          default: 0
+        dimensions:
+          $ref: '#/components/schemas/Dimensions'
+        active:
+          type: boolean
+          default: true
+        discontinuedAt:
+          type: string
+          format: date-time
+          nullable: true
+    Product:
+      allOf:
+        - $ref: '#/components/schemas/NewProduct'
+        - type: object
+          required: [id, createdAt]
+          properties:
+            id:
+              type: integer
+              format: int64
+              readOnly: true
+            createdAt:
+              type: string
+              format: date-time
+              readOnly: true
+    ProductPatch:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 80
+        price:
+          type: number
+          exclusiveMinimum: true
+          minimum: 0
+          maximum: 100000
+        stock:
+          type: integer
+          minimum: 0
+          maximum: 10000
+    ProductPage:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+        total:
+          type: integer
+          minimum: 0
+    OrderLine:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId:
+          type: integer
+          format: int64
+          minimum: 1
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 999
+    Address:
+      type: object
+      required: [kind, street, city, postalCode]
+      properties:
+        kind:
+          type: string
+          enum: [address]
+        street:
+          type: string
+          minLength: 1
+          maxLength: 100
+        city:
+          type: string
+          minLength: 1
+          maxLength: 60
+        postalCode:
+          type: string
+          pattern: '^[0-9]{5}$'
+    PickupPoint:
+      type: object
+      required: [kind, pointId]
+      properties:
+        kind:
+          type: string
+          enum: [pickup]
+        pointId:
+          type: string
+          minLength: 6
+          maxLength: 6
+    NewOrder:
+      type: object
+      required: [lines, delivery]
+      properties:
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/OrderLine'
+        delivery:
+          oneOf:
+            - $ref: '#/components/schemas/Address'
+            - $ref: '#/components/schemas/PickupPoint'
+          discriminator:
+            propertyName: kind
+            mapping:
+              address: '#/components/schemas/Address'
+              pickup: '#/components/schemas/PickupPoint'
+        couponCode:
+          type: string
+          pattern: '^[A-Z]{4}-[0-9]{4}$'
+        notes:
+          type: string
+          maxLength: 500
+          nullable: true
+        express:
+          type: boolean
+        requestedDeliveryDate:
+          type: string
+          format: date
+    Order:
+      allOf:
+        - $ref: '#/components/schemas/NewOrder'
+        - type: object
+          required: [id, status]
+          properties:
+            id:
+              type: string
+              format: uuid
+              readOnly: true
+            status:
+              type: string
+              enum: [accepted, packed, shipped]
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string

@@ -90,7 +90,7 @@ class SchemaIntegrationTest {
         MigrationInfo[] applied = flyway.info().applied();
 
         assertThat(applied).extracting(info -> info.getVersion().getVersion())
-                .containsExactly("1", "2", "3", "4", "5", "6", "7");
+                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8");
         assertThat(applied).allSatisfy(info -> assertThat(info.getState()).isEqualTo(MigrationState.SUCCESS));
         assertThat(flyway.info().pending()).isEmpty();
     }
@@ -105,11 +105,21 @@ class SchemaIntegrationTest {
     }
 
     @Test
+    void deterministicTestsNeedAScenarioKey() {
+        TestSuite suite = suites.saveAndFlush(new TestSuite(project.getId(), "Generated", null, TestSuite.Kind.GENERATED));
+
+        assertThatThrownBy(() -> testCases.saveAndFlush(new TestCase(project.getId(), suite.getId(), "GET /pets",
+                "No identity", TestCase.Category.HAPPY_PATH, TestCase.Origin.DETERMINISTIC, TestCase.RiskLevel.READ_ONLY,
+                Map.of(), Map.of(), HASH)))
+                .hasMessageContaining("ck_test_cases_scenario_key");
+    }
+
+    @Test
     void entitiesRoundTripIncludingJsonColumnsAndAuditTimestamps() {
         SpecificationVersion spec = specifications.saveAndFlush(specification(project.getId(), 1));
         TestSuite suite = suites.saveAndFlush(new TestSuite(project.getId(), "Generated", null, TestSuite.Kind.GENERATED));
         TestCase testCase = testCases.saveAndFlush(new TestCase(project.getId(), suite.getId(), "GET /pets/{id}",
-                "Get pet", TestCase.Category.HAPPY_PATH, TestCase.Origin.DETERMINISTIC, TestCase.RiskLevel.READ_ONLY,
+                "Get pet", TestCase.Category.HAPPY_PATH, TestCase.Origin.MANUAL, TestCase.RiskLevel.READ_ONLY,
                 Map.of("pathParams", Map.of("id", 7)), Map.of("expectedStatuses", List.of("200")), HASH));
 
         SpecificationVersion reloadedSpec = specifications.findById(spec.getId()).orElseThrow();

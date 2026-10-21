@@ -173,7 +173,9 @@ Other client settings:
 
 - Each test has a `risk_level` derived from its method: `READ_ONLY` (GET/HEAD/OPTIONS), `MUTATING` (POST/PUT/PATCH) or `DESTRUCTIVE` (DELETE).
 - Each environment has an `execution_policy`, defaulting to `READ_ONLY`. Raising it requires a confirmation dialog stating that the target must be a non-production system the user is authorized to test.
-- Generators never produce load, fuzzing or injection payloads, or oversized bodies. Boundary values are bounded (strings at most `maxLength + 1`, capped at 10,000 characters).
+- Generators never produce load, fuzzing or injection payloads, or oversized bodies. Boundary values are bounded: strings at most `maxLength + 1`, capped at 10,000 characters; arrays at most `maxItems + 1`, capped at 100 items; at most 100 tests per operation. ✅ Phase 4
+- Schema `pattern`s come from untrusted documents. Matching runs on a character sequence with a 200,000-read budget, so a catastrophically backtracking expression is abandoned instead of blocking a request thread (ADR-025). ✅ Phase 4
+- Tests are declarative data. An edited test cannot set `Host`, `Content-Length`, `Transfer-Encoding`, `Connection`, `Content-Type` (it comes from the body), `Authorization`, `Cookie` or any `Proxy-*` header. Header values cannot contain CR/LF, bodies are limited to 256 KB, and unknown JSON members (such as a `script` field) are rejected. ✅ Phase 4
 - An authorization notice is shown on first environment creation. The app does not offer scanning features.
 
 ## 7. Secrets and data minimization

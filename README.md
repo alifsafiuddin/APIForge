@@ -2,9 +2,16 @@
 
 A full-stack developer tool for **contract-driven API testing**. You import an OpenAPI 3.x specification, explore its endpoints, and generate deterministic test scenarios from its schemas. APIForge AI then runs them against an API you are authorized to test, validates every response against the documented contract, tracks specification coverage, and can ask a **locally hosted** LLM (Ollama) to explain failures.
 
-> **Status: Phase 3 (OpenAPI import and explorer) complete.**
-> What runs today: registration and sign-in (sessions, CSRF, lockout, rate limiting, audit trail), private API projects, **OpenAPI 3.0/3.1 import** (file upload or pasted JSON/YAML, strict validation with readable findings, immutable versions, no outbound requests) and a **specification explorer** (searchable endpoints, method badges, parameters, schemas and responses), plus read-only execution-history endpoints.
-> Test generation and execution, contract validation, coverage and AI are **not implemented yet**. See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
+> **Status: Phase 4 (deterministic test generation) complete.**
+> What runs today:
+> - Registration and sign-in: sessions, CSRF, lockout, rate limiting, audit trail.
+> - Private API projects.
+> - **OpenAPI 3.0/3.1 import**: file upload or pasted JSON/YAML, strict validation with readable findings, immutable versions, no outbound requests.
+> - A **specification explorer**.
+> - **Deterministic test generation** (no AI): valid requests; missing fields and parameters; wrong types; enum, boundary, string-length and array-length violations; unsupported content type; and authentication checks. Every test has an explicit expected outcome, documented response-schema checks and the reason it exists. Regeneration is repeatable and keeps your edits.
+> - A **test workspace** to review, edit, enable/disable and organize tests into suites.
+>
+> Test execution, contract validation, coverage and AI are **not implemented yet**, so generated tests cannot be run yet. See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
 ## Quick start
 
@@ -53,7 +60,11 @@ npm run dev
 
 Open http://localhost:5173, choose **Create one** to register (password: 12–64 characters, not a common password), and you land on the Overview with your projects and live system health.
 
-To try the explorer: create a project, open it, choose **Import specification** and upload [`samples/petstore3-openapi.yaml`](samples/) (the official Swagger Petstore 3 description, 19 endpoints). Importing never contacts the hosts the document mentions. The Vite dev server proxies `/api` and `/actuator` to the backend, so the browser only talks to one origin and the session cookie stays first-party.
+To try the explorer: create a project, open it, choose **Import specification** and upload [`samples/petstore3-openapi.yaml`](samples/) (the official Swagger Petstore 3 description, 19 endpoints). Importing never contacts the hosts the document mentions.
+
+To try test generation: import [`samples/warehouse-lab-openapi.yaml`](samples/), a constraint-rich sample with 7 endpoints, then open the project's **Tests** tab and choose **Generate tests**. The report lists what was created and every scenario that was skipped, with the reason. Pick an endpoint to see its tests; open one to see why it exists, what it sends and what it expects. You can edit, disable or move it to another suite. **Regenerate tests** creates no duplicates and leaves your edits in place.
+
+The Vite dev server proxies `/api` and `/actuator` to the backend, so the browser only talks to one origin and the session cookie stays first-party.
 
 ## Commands
 
@@ -83,6 +94,9 @@ All `/api/v1/**` endpoints require a signed-in session unless marked public. Sta
 | `GET, POST /api/v1/projects`; `GET, PATCH, DELETE /api/v1/projects/{id}` | Your projects (paged, searchable, optimistic locking on update) |
 | `POST /api/v1/projects/{id}/specs` (multipart `file` or JSON `{content}`), `POST …/specs/validate` | Import an OpenAPI 3.0/3.1 document as a new version / dry-run check |
 | `GET /api/v1/projects/{id}/specs[/{versionId}[/raw\|/schemas\|/operations[/{operationId}]]]`, `POST …/{versionId}/activate` | Versions, original document, component schemas, endpoint index and detail; activate a version |
+| `POST /api/v1/projects/{id}/tests/generate`, `GET …/tests/generation-plan?operationKey=` | Generate tests from the active version (report with skipped scenarios and reasons) / preview one operation |
+| `GET /api/v1/projects/{id}/tests[/summary\|/{testId}]`, `PUT, PATCH …/tests/{testId}`, `POST …/tests/bulk`, `POST …/tests/{testId}/review` | List and filter tests, counts per operation, detail; edit, enable/disable or move; bulk changes; approve/reject |
+| `GET, POST /api/v1/projects/{id}/test-suites`, `PATCH, DELETE …/test-suites/{suiteId}` | Suites (only empty custom suites can be deleted) |
 | `GET /api/v1/projects/{id}/runs[/{runId}[/results[/{resultId}]]]` | Execution history (read-only; populated once test execution exists) |
 
 Every response carries an `X-Request-Id` header. Errors use `application/problem+json` with a stable `code`.

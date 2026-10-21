@@ -24,6 +24,7 @@ Verified on **2026-10-20** (Phase 0) and updated with the versions actually reso
 | Spring AI | **2.0.1** (BOM `spring-ai-bom`) | Latest GA; 2.0.0 release notes: "upgrade to Spring Boot 4.1.0". 2.1.0-M1 targets Boot 4.2, not used |
 | swagger-parser (`io.swagger.parser.v3:swagger-parser-v3`) | **2.1.48** (swagger-core 2.2.53) | ✅ In use since Phase 3; only the OpenAPI 3 module (no Swagger 2 converter). Uses Boot-managed Jackson 2.21.5; dependency convergence passes |
 | SnakeYAML | 2.6 (Boot-managed) | ✅ Phase 3: YAML loading with explicit limits (ADR-024) |
+| RgxGen (`com.github.curious-odd-man:rgxgen`) | **3.1** | ✅ Phase 4: strings matching a schema `pattern` for generated test data. Apache 2.0, released 2025-08-18, no runtime dependencies; seeded `generate(RandomGenerator)` keeps output deterministic (ADR-025) |
 | openapi-request-validator-core (`com.atlassian.oai`) | **3.0.0** | Successor of `swagger-request-validator-core` (relocated). Built for Java 21, Spring 7.0.7, Jackson 2.21.3, networknt json-schema-validator 2.0.1, swagger-parser 2.1.41. We override swagger-parser to 2.1.48 and verify with tests (patch-level, same API) |
 | ArchUnit | 1.5.1 | Test only; rules in `ArchitectureTest` |
 | WireMock | Boot-compatible 3.x | Test only |
@@ -163,3 +164,33 @@ Verified on **2026-10-20** (Phase 0) and updated with the versions actually reso
 - **Operation index is not paged**: it is bounded by the 2,000-operation import limit and the explorer searches it client-side; all other collections remain paged.
 - **Request size cap for all bodies** (`RequestSizeLimitFilter`, in `config` to keep `common` free of a dependency on `config`; the ArchUnit cycle rule caught the first placement).
 - **Frontend test limitation**: Vitest 5's jsdom bridge cannot stream a jsdom `FormData` through Node's fetch (content-length mismatch), so the component test for file upload asserts the multipart request at the `fetch` boundary; the real multipart upload is verified end to end in a browser against the backend (Phase 3 completion check) and by backend integration tests.
+
+### ADR-025 Phase 4: deterministic test generation
+- **The generator works on stored, normalized data only** (`generation.engine`): the operation rows and component schemas saved at import. It needs no OpenAPI library, no network and no database, so it is a pure function. Unit tests run it on the real import analyzer's output, round-tripped through JSON exactly as jsonb would return it (`GenerationFixtures`).
+- **Every generated value is validated.** A small request-oriented JSON Schema validator (`SchemaValidator`) checks valid requests before they are used and each negative request after mutation. It covers types (including 3.0 `nullable` and 3.1 type arrays), enum/const, inclusive and exclusive bounds in both 3.0 and 3.1 form, `multipleOf` in exact decimals, length in code points, `pattern`, items/uniqueness, properties/required/additionalProperties/readOnly, and allOf/oneOf/anyOf/not. Keywords it does not evaluate (`if/then/else`, `patternProperties`, `prefixItems`, …) are reported as "not verified" in the test's rationale rather than ignored silently.
+- **Single-fault rule.** A negative scenario is kept only if validation shows that the changed value breaks exactly the targeted constraint, at exactly that location. Otherwise it is recorded as skipped together with the conflicting constraint (for example, "shorter than minLength would also break the pattern"). It is never stored as a misleading test.
+- **What is generated:**
+  - A minimal valid request (required parameters and properties only), plus a complete one (all documented fields) when the two differ.
+  - Authentication without credentials and with invalid credentials, when the operation requires authentication.
+  - Missing required query and header parameters.
+  - For parameters and body fields: wrong types; invalid enum values; values below, above and at numeric bounds; too short, too long and at string-length bounds; too few, too many and at array-length bounds. Body fields are explored through nested objects and the first array item, three levels deep.
+  - A missing request body when the body is required, and an undocumented content type.
+- **What is reported as skipped, with the reason:** missing path parameters, cookie parameters, fields inside oneOf/anyOf, non-JSON bodies, limits above 10,000 characters or 100 items, unsatisfiable schemas, and scenarios beyond 100 per operation. String parameters never get "wrong type" tests, because everything in a URL is text.
+- **Explicit expectations from the document:**
+  - Success: the documented 2XX statuses.
+  - Invalid input: whichever of 400/422 are documented (path parameters 400/404/422, content type 415, missing body 400/415/422); if none are, the 4XX class, and the summary says so.
+  - Authentication: the documented 401/403, or both with the HTTP rationale.
+  - Each expectation lists the documented response bodies (status, media type, schema) the response will be validated against.
+- **Values, in order of preference:** const, documented examples, default, enum, oneOf/anyOf alternatives (setting the discriminator), then values synthesized from type and constraints (realistic format samples, `pattern` via RgxGen seeded by the value's position, bounds and `multipleOf` in exact decimals). readOnly properties are never sent. A `pattern` that cannot be evaluated makes a value impossible rather than unverified: Java-incompatible syntax, or more than 200,000 character reads (which stops catastrophic backtracking). The same applies to recursive required properties deeper than 8 levels.
+- **Stable identity and idempotent regeneration:**
+  - Each scenario has a readable key (`body.missing:/name`, `query.above-maximum:limit`, `auth.none`), and `dedupe_hash = SHA-256(operation key, scenario key)`. The hash does not depend on generated values, so regenerating after a document change updates the same row (same id, suite, enabled flag and history).
+  - Unchanged scenarios are not rewritten, and tests the user edited (`user_modified`) are never overwritten.
+  - Generated tests whose scenario no longer applies are archived, unless the user edited them.
+  - Generation locks the project row, so concurrent runs serialize.
+- **Curation:**
+  - Enable or disable tests.
+  - Move them between suites: one GENERATED suite per project plus custom suites, and only empty custom suites can be deleted.
+  - Edit the request, expectations and rationale. Edits are validated: path parameters must match the path, credential and transport headers are refused, and the body is bounded.
+  - Review (approve or reject). Archived tests are history, not workspace items.
+- **Left out of scope on purpose:** pattern-violation tests (a "non-matching" string cannot be reliably told apart from a type or length fault), creating tests from scratch, and AI suggestions (the `origin`/review model already supports them).
+- **Engineering notes:** RgxGen was chosen over hand-written regex synthesis after checking its release date, license and dependency tree. List rows include the optimistic-lock `version`, so toggling a single test needs no extra fetch. JDBC batching (`hibernate.jdbc.batch_size: 50`) is on because one generation can write hundreds of rows.

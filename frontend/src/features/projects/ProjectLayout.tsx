@@ -10,7 +10,10 @@ import { cn } from '@/lib/utils'
 
 import { useProject } from './api'
 
-const SECTIONS = [{ to: 'spec', label: 'Specification' }]
+const SECTIONS = [
+  { to: 'spec', label: 'Specification' },
+  { to: 'tests', label: 'Tests' },
+]
 
 /** Frame for one project: breadcrumb, title and section navigation. */
 export function ProjectLayout() {

@@ -1,7 +1,12 @@
 package com.apiforge.testcase.domain;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -13,6 +18,7 @@ import jakarta.persistence.Table;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import com.apiforge.common.json.JsonValues;
 import com.apiforge.common.persistence.AuditableEntity;
 
 /**
@@ -24,8 +30,8 @@ import com.apiforge.common.persistence.AuditableEntity;
 public class TestCase extends AuditableEntity {
 
     public enum Category {
-        HAPPY_PATH, REQUIRED_FIELD, MISSING_FIELD, INVALID_TYPE, BOUNDARY_VALUE, ENUM_VALUE,
-        QUERY_PARAMETER, PATH_PARAMETER, HEADER, RESPONSE_VALIDATION, AUTH, CUSTOM
+        HAPPY_PATH, MISSING_FIELD, INVALID_TYPE, BOUNDARY_VALUE, ENUM_VALUE, STRING_LENGTH, ARRAY_LENGTH,
+        QUERY_PARAMETER, PATH_PARAMETER, HEADER, CONTENT_TYPE, RESPONSE_VALIDATION, AUTH, CUSTOM
     }
 
     public enum Origin {
@@ -50,6 +56,16 @@ public class TestCase extends AuditableEntity {
                 case "DELETE" -> DESTRUCTIVE;
                 default -> MUTATING;
             };
+        }
+    }
+
+    /** Everything the deterministic generator decides about one scenario. */
+    public record Definition(String operationKey, String scenarioKey, String name, Category category,
+            RiskLevel riskLevel, RequestTemplate request, Expectations expectations, String rationale,
+            String specLocation, int sortOrder, String generatorVersion) {
+
+        public String dedupeHash() {
+            return TestCase.dedupeHash(operationKey, scenarioKey);
         }
     }
 
@@ -106,6 +122,21 @@ public class TestCase extends AuditableEntity {
     @Column(name = "dedupe_hash", nullable = false, length = 64)
     private String dedupeHash;
 
+    @Column(name = "scenario_key", length = 300)
+    private String scenarioKey;
+
+    @Column(name = "spec_location", length = 1000)
+    private String specLocation;
+
+    @Column(name = "enabled", nullable = false)
+    private boolean enabled = true;
+
+    @Column(name = "user_modified", nullable = false)
+    private boolean userModified;
+
+    @Column(name = "sort_order", nullable = false)
+    private int sortOrder;
+
     @Column(name = "reviewed_by")
     private UUID reviewedBy;
 
@@ -135,14 +166,112 @@ public class TestCase extends AuditableEntity {
         this.dedupeHash = dedupeHash;
     }
 
+    /** A new deterministic test in {@code suiteId}, generated from {@code sourceVersionId}. */
+    public static TestCase generated(UUID projectId, UUID suiteId, UUID sourceVersionId, Definition definition) {
+        TestCase test = new TestCase(projectId, suiteId, definition.operationKey(), definition.name(),
+                definition.category(), Origin.DETERMINISTIC, definition.riskLevel(), definition.request().toMap(),
+                definition.expectations().toMap(), definition.dedupeHash());
+        test.apply(definition, sourceVersionId);
+        return test;
+    }
+
+    /**
+     * Identity of a generated scenario. It depends only on the operation and the scenario key, not on
+     * generated values, so regenerating from a changed document updates the existing test in place.
+     */
+    public static String dedupeHash(String operationKey, String scenarioKey) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(("deterministic\n" + operationKey + "\n" + scenarioKey).getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is required by every Java platform", ex);
+        }
+    }
+
+    /** Whether the stored content already equals {@code definition} (values compared as JSON). */
+    public boolean matches(Definition definition) {
+        return name.equals(definition.name())
+                && category == definition.category()
+                && riskLevel == definition.riskLevel()
+                && sortOrder == definition.sortOrder()
+                && Objects.equals(rationale, definition.rationale())
+                && Objects.equals(specLocation, definition.specLocation())
+                && Objects.equals(generatorVersion, definition.generatorVersion())
+                && JsonValues.jsonEquals(requestTemplate, definition.request().toMap())
+                && JsonValues.jsonEquals(expectations, definition.expectations().toMap());
+    }
+
+    /** Replaces the generated content; user choices (enabled, suite, review) are kept. */
+    public void refresh(Definition definition, UUID sourceVersionId) {
+        this.name = definition.name();
+        this.category = definition.category();
+        this.riskLevel = definition.riskLevel();
+        this.requestTemplate = definition.request().toMap();
+        this.expectations = definition.expectations().toMap();
+        apply(definition, sourceVersionId);
+    }
+
+    private void apply(Definition definition, UUID sourceVersionId) {
+        this.rationale = definition.rationale();
+        this.specLocation = definition.specLocation();
+        this.sortOrder = definition.sortOrder();
+        this.generatorVersion = definition.generatorVersion();
+        this.scenarioKey = definition.scenarioKey();
+        this.sourceSpecificationVersionId = sourceVersionId;
+    }
+
+    /** Records that an unchanged scenario was confirmed against {@code sourceVersionId}. */
+    public void confirmSource(UUID sourceVersionId) {
+        this.sourceSpecificationVersionId = sourceVersionId;
+    }
+
+    /**
+     * A user edit. The test is marked as modified, so regeneration no longer overwrites it; an
+     * edited AI suggestion needs a new review.
+     */
+    public void edit(String newName, RequestTemplate request, Expectations newExpectations, String newRationale) {
+        this.name = newName;
+        this.requestTemplate = request.toMap();
+        this.expectations = newExpectations.toMap();
+        this.rationale = newRationale;
+        this.userModified = true;
+        if (origin == Origin.AI_SUGGESTED) {
+            this.reviewStatus = ReviewStatus.PENDING_REVIEW;
+            this.reviewedBy = null;
+            this.reviewedAt = null;
+        }
+    }
+
     public void review(ReviewStatus decision, UUID reviewerId, Instant now) {
         this.reviewStatus = decision;
         this.reviewedBy = reviewerId;
         this.reviewedAt = now;
     }
 
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public void moveTo(UUID targetSuiteId) {
+        this.suiteId = targetSuiteId;
+    }
+
+    /** Soft delete: kept for history, excluded from listings, runs and the dedupe index. */
+    public void archive() {
+        this.lifecycleStatus = LifecycleStatus.ARCHIVED;
+    }
+
     public boolean isExecutable() {
-        return reviewStatus == ReviewStatus.APPROVED && lifecycleStatus == LifecycleStatus.ACTIVE;
+        return enabled && reviewStatus == ReviewStatus.APPROVED && lifecycleStatus == LifecycleStatus.ACTIVE;
+    }
+
+    public RequestTemplate getRequest() {
+        return RequestTemplate.fromMap(requestTemplate);
+    }
+
+    public Expectations getExpectationsValue() {
+        return Expectations.fromMap(expectations);
     }
 
     public UUID getProjectId() {
@@ -203,6 +332,26 @@ public class TestCase extends AuditableEntity {
 
     public String getDedupeHash() {
         return dedupeHash;
+    }
+
+    public String getScenarioKey() {
+        return scenarioKey;
+    }
+
+    public String getSpecLocation() {
+        return specLocation;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public boolean isUserModified() {
+        return userModified;
+    }
+
+    public int getSortOrder() {
+        return sortOrder;
     }
 
     public UUID getReviewedBy() {

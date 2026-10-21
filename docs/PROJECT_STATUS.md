@@ -1,70 +1,66 @@
 # Project Status
 
-**Current phase**: Phase 3 — OpenAPI specification import and explorer — **complete** (2026-10-21)
-**Next phase**: decided by the next phase brief (planned: environments, outbound request safety, ad hoc execution and contract validation)
-**Runnable today**: registration and sign-in, private projects, OpenAPI 3.0/3.1 import (upload or paste) with immutable versions, the specification explorer, read-only execution history API. Not yet: environments, test generation and execution, contract validation, coverage, AI.
+**Current phase**: Phase 4 — Deterministic test-case generation — **complete** (2026-10-21)
+**Next phase**: decided by the next phase brief (planned: environments, outbound request safety, execution and contract validation)
+**Runnable today**: registration and sign-in, private projects, OpenAPI 3.0/3.1 import with immutable versions, the specification explorer, **deterministic test generation with a review and curation workspace**, read-only execution history API. Not yet: environments, test execution, contract validation, coverage, AI.
 
-## Phase 3 summary
+## Phase 4 summary
 
 ### Delivered
 
 | Requirement | Implementation | Where |
 |---|---|---|
-| OpenAPI 3.x JSON and YAML | Format detected from content; 3.0.x and 3.1.x accepted, Swagger 2.0 and other versions rejected with guidance | `spec/internal/DocumentReader`, `SpecificationAnalyzer` |
-| File upload and text input | `POST /specs` as multipart (`file`) or JSON (`{content}`); same for `/specs/validate` (dry run) | `spec/web/SpecificationController` |
-| Size and content limits | 5 MB document limit (multipart limits, `RequestSizeLimitFilter` for every body incl. chunked, service check); strict UTF-8; YAML alias, nesting, code-point limits; no duplicate keys; ≤ 2,000 operations; path length | `config/RequestSizeLimitFilter`, `spec/internal/*` |
-| Maintained parser | swagger-parser 2.1.48 (OpenAPI 3 module), fed a pre-validated JSON string | `spec/internal/OpenApiParserAdapter` |
-| Understandable errors | Every finding is `{severity, code, message, location}`; line/column for syntax errors, document path otherwise; 422 `SPEC_INVALID` lists them all | `ImportMessage`, API_DESIGN §2.3 |
-| Metadata extraction | Info, servers, tags, security schemes, component schemas; per operation: method, path, operationId, summary, description, tags, deprecated, effective parameters, request body, ordered responses with headers, effective security | `spec/internal/OpenApiNormalizer` |
-| Local references and nested objects | Parameter/request-body/response/header references resolved; schema references kept and resolved against stored component schemas (recursion-safe) | `OpenApiNormalizer`, `SchemaView` |
-| Duplicate/ambiguous operations, unsupported features | Duplicate keys (hidden duplicate paths/methods), duplicate operationIds, ambiguous paths, undeclared path parameters → errors; callbacks, webhooks, links, cookie parameters, non-JSON-only bodies, OAuth2/OIDC/mTLS, 3.1 validation scope → warnings/notes | `SpecificationAnalyzer` |
-| Persist original, version, normalized metadata | V7 migration: `api_operations` (immutable) + new `specification_versions` columns; raw document stored byte for byte with SHA-256 | `db/migration/V7__…` |
-| Versions keep their test results | Versions and operations are immutable; runs keep `specification_version_id`; activating another version marks tests for vanished operations STALE (kept) and revives returning ones | `SpecificationService.activate`, ITs |
-| No outbound HTTP during import | Every non-local `$ref` is rejected before parsing; the parser gets content, never a location | `ReferenceGuard`; IT with a live local server receiving 0 requests |
-| Explorer | Project page → Specification: version selector, searchable endpoint index grouped by tag with method badges and filters, version overview (servers, schemes, tags, findings, download original), endpoint detail (parameters, request body, responses, headers, security, warnings) with an expandable schema viewer; import dialog (upload/drag-and-drop or paste, dry-run check) | `frontend/src/features/specs/*` |
+| Deterministic engine before AI | Pure generator over the stored, normalized operations and component schemas; no randomness except RgxGen seeded by position; generator version stored with each test | `generation/engine/*` (ADR-025) |
+| Inspect operations, parameters, request/response schemas, constraints, security | Effective parameters by location, JSON request bodies (incl. `+json`, `*/*`), `$ref`/`allOf`/`oneOf`/discriminator, 3.0 and 3.1 constraints, documented responses and their schemas, effective security requirements and schemes | `SchemaResolver`, `Schema`, `ResponseCatalog`, `DeterministicTestGenerator` |
+| Scenarios from the brief | Valid request (minimal and complete); missing required fields; wrong primitive types; invalid enum values; below/above/at minimum and maximum (inclusive and exclusive); string length below/above/at; array length below/above/at; missing required query and header parameters (path: not representable, reported); unsupported content type; documented success and error statuses with response-schema checks; requests without and with invalid credentials | Category per scenario: `HAPPY_PATH`, `MISSING_FIELD`, `INVALID_TYPE`, `ENUM_VALUE`, `BOUNDARY_VALUE`, `STRING_LENGTH`, `ARRAY_LENGTH`, `QUERY_PARAMETER`, `HEADER`, `CONTENT_TYPE`, `AUTH` |
+| No empty-body assumption; no impossible or misleading tests | Body scenarios only where a body is documented; optional bodies omitted from the minimal request; required non-JSON bodies only get "missing body". Every valid value is validated; every negative breaks exactly one constraint (single-fault rule) or is skipped with the reason; unevaluable patterns make values impossible rather than unverified | `SchemaValidator`, `ValueSynthesizer` |
+| Required properties and parameter locations | Missing-field tests only for `required`; readOnly never sent; path parameters always set; string parameters never get type tests; cookie and reserved headers reported | `DeterministicTestGenerator` |
+| Explicit expected outcomes | Documented 2XX for success; documented 400/422 (path 400/404/422, content type 415, missing body 400/415/422) else 4XX, stated; 401/403 for authentication; documented response bodies listed for schema validation | `ResponseCatalog`, `Expectations` |
+| Reason each test was generated | `rationale` (sentence), `spec_location` (pointer into the spec), `scenario_key`; skipped scenarios returned with reasons by generation and by the per-operation plan | V8 columns, `GET …/tests/generation-plan` |
+| Deterministic vs AI-suggested | `origin` (`DETERMINISTIC`, `AI_SUGGESTED`, `MANUAL`) shown in list and detail; AI suggestions need review (existing rule) and return to review when edited | `TestCase` |
+| Stable identifiers, no uncontrolled duplicates | `dedupe_hash = SHA-256(operation key, scenario key)` under the partial unique index; regeneration updates in place, keeps user edits, archives obsolete generated tests | `TestGenerationService` |
+| Review, edit, enable, disable, organize | Test workspace (Tests tab): endpoint index with counts, filters, bulk enable/disable/move, detail panel (why, expected, request, provenance), edit with validation, approve/reject, suites dialog; REST API in API_DESIGN §2.7 | `testcase/*`, `frontend/src/features/tests/*` |
+| Persist suites and cases in PostgreSQL | `test_suites`, `test_cases` (V5) extended by V8; one GENERATED suite per project; audit `TESTS_GENERATED` | `V8__deterministic_test_generation.sql` |
+| Comprehensive unit tests for schema edge cases | 57 validator + 53 synthesizer + 35 generator scenario tests | TESTING.md §7 |
 
 ### Verification (executed 2026-10-21; Windows 11, Docker Desktop 29.9.1, Node 24.22.0, JDK 21.0.8)
 
 | Check | Method | Result |
 |---|---|---|
-| Backend build and tests | `./mvnw verify` | ✅ **189 tests, 0 failures, 0 errors, 0 skipped**; line coverage 92.2% (1657/1798), branch 76.6% |
-| Frontend lint / typecheck / tests | `npm run check` | ✅ 0 lint findings (no suppressions), tsc clean, **74/74 tests**; coverage lines 92.0%, branches 77.6% |
-| Frontend build / audit | `npm run build`, `npm audit` | ✅ no warnings; 0 vulnerabilities |
-| Required test cases | Valid JSON; valid YAML; malformed input; missing required fields; nested references; arrays, enums, nullable, required; unsupported/invalid references; oversized uploads | ✅ all covered (TESTING.md §7: `SpecificationAnalyzerTest`, `SpecificationImportIntegrationTest`, `RequestSizeLimitFilterTest`, `SchemaView.test.tsx`, `SpecificationPage.test.tsx`) |
-| **Completion check**: import a real sample, verify the endpoint inventory, refresh, confirm persistence | Headless Microsoft Edge against the running stack (PostgreSQL in Docker, backend, Vite): registered, created a project, **uploaded `samples/petstore3-openapi.yaml` through the browser** (real multipart), dry-run check, import; compared the inventory with the document; opened `GET /pet/{petId}`; reloaded the page; searched; tried an invalid import; mobile layout | ✅ 15/15 checks: version 1 with **19 endpoints, identical to the document's 19 (method, path) pairs in order**; detail showed the required `petId` path parameter, responses 200/400/404/default and the expanded `Pet` schema with its status enum; **after reload the endpoint detail and all 19 endpoints were still there**; search narrowed to 3 order endpoints; the invalid document showed "Required field 'info' is missing." with its location; no JavaScript errors |
-| Persistence in the database | `psql` on the dev database after the browser run | ✅ `specification_versions`: v1, active, 19 operations, YAML, 23,165 bytes (= the file); 19 `api_operations` rows; `SPECIFICATION_IMPORTED` audit event |
-| Migration on existing data | Backend start against the Phase 2 dev database | ✅ V6 → V7 applied |
-| Clean checkout | `git checkout-index` of the staged tree into an empty directory; `mvnw verify`, `npm ci && npm run check && npm run build` | See final line below |
-
-Clean checkout (final staged tree): ✅ backend 189/189 tests, BUILD SUCCESS; `npm ci` (0 vulnerabilities), `npm run check` 74/74, `npm run build` with 0 warnings.
+| Backend build and tests (clean checkout) | `git checkout-index` of the staged tree into an empty directory, `mvnw verify` | ✅ **388 tests, 0 failures, 0 errors, 0 skipped**; enforcer rules pass; line coverage 92.6% (3531/3812), branch 78.1%; `generation` package 91.0% lines / 78.5% branches (plan target ≥ 90% lines) |
+| Frontend (clean checkout) | `npm ci`, `npm run check`, `npm run build` | ✅ 0 vulnerabilities; 0 lint findings; tsc clean; **81/81 tests**; build without warnings (final staged tree, re-exported after the last test was added); coverage lines 89.1%, branches 74.7% |
+| Migration on existing data | Backend start against the Phase 3 dev database | ✅ V7 → V8 applied |
+| **Completion check**: a sample with multiple data types, constraints and response schemas; generated tests are valid, explainable and repeatable | Headless Microsoft Edge against the running stack (PostgreSQL in Docker, backend jar, Vite). Registered, created a project, uploaded **`samples/warehouse-lab-openapi.yaml`** (7 endpoints), generated, inspected, edited one test, disabled another, reloaded, regenerated, checked the mobile layout; then queried the database | ✅ **19/19 checks.** **128 tests** across 10 categories, every one with an explicit expected status; report lists skipped scenarios with reasons (e.g. oneOf field, missing path parameter). **Valid**: the generator test validates every generated request of five fixture specs (incl. this one) against its claim. **Explainable**: the detail of "Missing required field 'name'" shows *"'name' is listed in 'required' of schema NewProduct. The request omits it."*, expected 400/422 with the `Error` schema checks, source `#/components/schemas/NewProduct/required`. **Repeatable**: regeneration reported *0 new, 0 updated, 127 unchanged, 1 edited by you*; all 128 test ids identical before and after; the edit and the disabled state survived reload and regeneration; no JavaScript errors; no horizontal scroll at 390 px |
+| Persistence in the database | `psql` after the browser run | ✅ 128 rows, 128 distinct identities, exactly 1 user-edited and 1 disabled; no row without rationale, location, scenario key or generator version; `TESTS_GENERATED` audit events with created 128 then 0 |
 
 ### Defects found and fixed during this phase
 
-- **YAML aliases were silently corrupted**: Jackson's YAML parser returns `*alias` as a plain string, so documents using anchors imported wrong data and the alias limit never applied. Found by the alias-bomb test; YAML is now loaded with SnakeYAML under explicit limits (ADR-024).
-- **Undeclared path parameters were accepted** (swagger-parser does not report them); now an error.
-- **Array parameters' `$ref`s were skipped** by the first reference-guard draft (array items were treated as author-chosen names); fixed before the first run.
-- **Module cycle** `common` ↔ `config` introduced by the size filter; caught by the ArchUnit cycle rule, filter moved to `config`.
-- **Silent UI failure**: the import dialog only displayed API errors, so a network failure showed nothing; all failures are now shown (with a test).
-- **Mobile overflow**: a long version title widened the version selector beyond a phone screen; found by the browser check, fixed.
-- **Schema viewer collapsed one-level references** (e.g. an enum behind `$ref`) because expansion counted property depth; now counts reference depth.
+- **Required array query parameters were sent empty** in the minimal request (`tags=[]` is indistinguishable from omitting it); parameters now always use a non-empty value, and a parameter that can only be empty is reported.
+- **The array-size helper validated against the array's own maxItems**, so "more than maxItems" fell back to duplicate items and was wrongly skipped as a uniqueness conflict; the helper now builds raw item lists and the skip reason names the *other* violated constraint.
+- **An unevaluable `pattern` let the synthesizer accept "sample"** as valid; such values are now impossible rather than unverified.
+- **The backtracking test used `(a+)+`, which Java memoizes**; replaced by a pattern that really exceeds the read budget (`^(.*a){12}$`, abandoned after ~6 ms).
+- **HQL could not instantiate a nested record** (`TestCaseRepository.OperationCount`); moved to a top-level projection record (caught by the Spring context in integration tests).
+- **The test panel kept the component's narrow default width** (`max-w-sm` beats `sm:max-w-2xl`); widened with the matching variant.
+- Text: article ("an array"), clearer type rationales ("Field 'id' must be integer (…)"), array-root labels (`body[0].email`).
 
 ### Known limitations
 
-- Specifications split across files must be bundled before import (by design: no fetching).
-- OpenAPI 3.1-specific schema keywords are displayed as written; contract validation support for them is decided with the validator (ADR-021).
-- Markdown in descriptions is shown as plain text (safe by design; no rich rendering).
-- Sessions and rate limits are in memory (single instance); GitHub CI has not run yet (no remote).
-- The frontend upload component test asserts the multipart request at the `fetch` boundary because of a Vitest/jsdom FormData limitation; the real upload is verified by backend ITs and the browser check (ADR-024).
+- Tests cannot be executed yet (no environments/runs); `validateResponseSchema` and response checks are recorded for the executor.
+- Pattern-violation tests are not generated (ADR-025); fields inside oneOf/anyOf are not mutated; non-JSON bodies only get "missing body"; at most 100 tests per operation.
+- Tests are created by generation only (no blank manual test); disable a test to stop it from running.
+- The browser check found the backend process ending once with `0xC0000005` while started through `mvnw spring-boot:run` from a background PowerShell job, without a JVM crash report; the same build ran the complete check as `java -jar` without problems. Recorded, not reproduced.
+- Sessions and rate limits are in memory (single instance); GitHub CI status for this branch is checked by the user.
 
 ## History
 
+- **Phase 3 (2026-10-21)** — OpenAPI 3.0/3.1 import (upload or paste) with strict validation, local-only references, immutable versions and normalized operations (V7); specification explorer. 189 backend and 74 frontend tests; completion check with the official Petstore 3 sample. Committed as `396be8e`.
 - **Phase 2 (2026-10-21)** — Database schema (V2–V6), session authentication with CSRF, lockout, rate limiting and audit trail; ownership-based authorization with 404 for foreign resources; projects CRUD; read-only execution history; ArchUnit rules. 129 backend and 51 frontend tests; committed as `0da6635` (branch `phase-2-database-auth`).
 - **Phase 1 (2026-10-21)** — Runnable foundation: Spring Boot 4.1.1, PostgreSQL 18.6, Flyway, Actuator health, problem+json errors, request correlation, CORS, React shell, CI workflow. Committed as `fbbd96f`.
 - **Phase 0 (2026-10-20)** — Design documents and verified dependency matrix.
 
 ## Open risks carried forward
 
-1. **openapi-request-validator message mapping** (JSON path, expected/actual) and **regex DoS in schema `pattern`**: spike when contract validation starts (ADR-006).
+1. **openapi-request-validator message mapping** (JSON path, expected/actual) and **regex DoS in schema `pattern`** inside that library: spike when contract validation starts (ADR-006). The generator's own pattern matching is already budgeted (ADR-025).
 2. **Small-model JSON reliability** for AI features (ADR-019).
 
 ## Milestone checklist
@@ -73,8 +69,9 @@ Clean checkout (final staged tree): ✅ backend 189/189 tests, BUILD SUCCESS; `n
 - [x] Phase 1 — Foundation
 - [x] Phase 2 — Database design and authentication
 - [x] Phase 3 — OpenAPI import and explorer
+- [x] Phase 4 — Deterministic test generation
 - [ ] Environments (AES-GCM secrets, redaction), outbound safety (`outbound` module, `demo-target`), ad hoc execution, contract validation
-- [ ] Deterministic test generation and runs
+- [ ] Test runs (execution)
 - [ ] Coverage and dashboard
 - [ ] AI (Ollama via Spring AI)
 - [ ] Hardening and release (Dockerfiles, nginx, full Compose, Playwright E2E in CI)
@@ -84,9 +81,9 @@ Clean checkout (final staged tree): ✅ backend 189/189 tests, BUILD SUCCESS; `n
 | Criterion | Status |
 |---|---|
 | Frontend and backend run together | ✅ (dev mode) |
-| PostgreSQL persists real application data | ✅ users, projects, specifications, operations, audit trail |
+| PostgreSQL persists real application data | ✅ users, projects, specifications, operations, test suites and cases, audit trail |
 | Valid OpenAPI spec can be imported and explored | ✅ Phase 3 (verified with the official Petstore 3 document) |
-| Real tests generated and executed against an authorized test API | ☐ |
+| Real tests generated and executed against an authorized test API | ◐ Generated (Phase 4); execution pending |
 | Contract validation produces explainable results | ☐ |
 | Test history and coverage persist | ◐ History schema and read API exist; nothing writes runs yet |
 | AI suggestions and explanations work through a local model | ☐ |

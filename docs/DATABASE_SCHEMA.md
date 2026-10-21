@@ -158,6 +158,11 @@ erDiagram
         text rationale
         varchar generator_version
         char dedupe_hash
+        varchar scenario_key
+        varchar spec_location
+        boolean enabled
+        boolean user_modified
+        integer sort_order
         uuid reviewed_by FK "SET NULL"
         timestamptz reviewed_at
         timestamptz created_at
@@ -217,8 +222,9 @@ erDiagram
 | `V5__test_suites_and_test_cases.sql` | `test_suites`, `test_cases` |
 | `V6__test_runs_and_test_results.sql` | `test_runs`, `test_results` (+ immutability trigger) |
 | `V7__api_operations_and_spec_metadata.sql` | `api_operations` (+ immutability trigger); `specification_versions` gains `source_name`, `description`, `tags`, `component_schemas`, `operation_count`; audit types `SPECIFICATION_IMPORTED`, `SPECIFICATION_ACTIVATED` |
+| `V8__deterministic_test_generation.sql` | `test_cases` gains `scenario_key`, `spec_location`, `enabled`, `user_modified`, `sort_order`; categories `STRING_LENGTH`, `ARRAY_LENGTH`, `CONTENT_TYPE` added and the unused `REQUIRED_FIELD` removed; one GENERATED suite per project; audit type `TESTS_GENERATED` |
 
-Applied migrations are never edited; corrections are new migrations. Verified on an empty database (Testcontainers) and incrementally on the development database (V1 → V6 in Phase 2, V6 → V7 in Phase 3).
+Applied migrations are never edited; corrections are new migrations. Verified on an empty database (Testcontainers) and incrementally on the development database (V1 → V6 in Phase 2, V6 → V7 in Phase 3, V7 → V8 in Phase 4).
 
 ## 3. Integrity rules enforced by the database
 
@@ -234,7 +240,9 @@ Applied migrations are never edited; corrections are new migrations. Verified on
 | History cannot be rewritten | Triggers reject `UPDATE` on `test_results`, `specification_versions`, `api_operations` and `audit_events`, except the `SET NULL` caused by deleting a referenced user or test case |
 | Enumerations are closed | `CHECK (… IN (…))` on every status/kind/category column, mirrored by Java enums |
 | Names unique where it matters | Active project names per owner (case-insensitive, partial index on `archived_at IS NULL`); environment and suite names per project |
-| Regeneration is idempotent | Partial unique index `(project_id, dedupe_hash)` for non-archived test cases |
+| Regeneration is idempotent | Partial unique index `(project_id, dedupe_hash)` for non-archived test cases; for generated tests the hash is SHA-256 of the operation key and the scenario key (ADR-025) |
+| Generated tests have a stable identity | `ck_test_cases_scenario_key`: `origin = DETERMINISTIC ⇒ scenario_key NOT NULL` |
+| One suite receives generated tests | Partial unique index `uq_test_suites_project_generated` on `project_id WHERE kind = 'GENERATED'` |
 
 ## 4. Deletion rules
 
@@ -249,12 +257,12 @@ Applied migrations are never edited; corrections are new migrations. Verified on
 
 ## 5. Indexes
 
-Beyond primary keys and the unique constraints above: `api_projects(owner_id, updated_at DESC)`, `audit_events(user_id, occurred_at DESC)`, `audit_events(event_type, occurred_at DESC)`, `test_cases(project_id, operation_key)`, `test_cases(suite_id)`, `test_cases(project_id, review_status)`, `test_runs(project_id, created_at DESC)`, `test_runs(project_id, status)`, `test_results(test_run_id, executed_at)`, `test_results(test_case_id)`, `test_results(operation_key, outcome)`.
+Beyond primary keys and the unique constraints above: `api_projects(owner_id, updated_at DESC)`, `audit_events(user_id, occurred_at DESC)`, `audit_events(event_type, occurred_at DESC)`, `test_cases(project_id, operation_key)`, `test_cases(suite_id)`, `test_cases(project_id, review_status)`, `test_cases(project_id, operation_key, sort_order)`, `test_runs(project_id, created_at DESC)`, `test_runs(project_id, status)`, `test_results(test_run_id, executed_at)`, `test_results(test_case_id)`, `test_results(operation_key, outcome)`.
 
 ## 6. Notable decisions
 
 - **Coverage snapshots are not stored** (the brief made them optional). Coverage is computed from `test_cases` and `test_results`, which already persist (ADR-013); a snapshot table can be added if it becomes slow.
-- **Audit events are stored** for security-relevant actions: `USER_REGISTERED`, `LOGIN_SUCCEEDED`, `LOGIN_FAILED`, `ACCOUNT_LOCKED`, `LOGOUT`, `PROJECT_CREATED`, `PROJECT_DELETED`, `CROSS_USER_ACCESS_DENIED`. `subject` holds the e-mail used in a failed sign-in (so attacks on unknown accounts are visible); logs only ever contain user ids.
+- **Audit events are stored** for security-relevant actions: `USER_REGISTERED`, `LOGIN_SUCCEEDED`, `LOGIN_FAILED`, `ACCOUNT_LOCKED`, `LOGOUT`, `PROJECT_CREATED`, `PROJECT_DELETED`, `CROSS_USER_ACCESS_DENIED`, `SPECIFICATION_IMPORTED`, `SPECIFICATION_ACTIVATED`, `TESTS_GENERATED`. `subject` holds the e-mail used in a failed sign-in (so attacks on unknown accounts are visible); logs only ever contain user ids.
 - **Entities reference each other by id** (no JPA associations). Every lookup goes through an owner- or project-scoped repository method, which keeps authorization explicit and avoids lazy-loading surprises with `open-in-view=false`.
 - `test_runs` has no `version` column: runs are written by a single executor; results are append-only.
 - `api_operations` stores one row per (method, path) of a version. `operation_key` (`GET /pets/{petId}`, checked by `ck_api_operations_key`) is the stable identity that links test cases and results across versions; re-importing never edits old rows, and test cases whose key disappears become `STALE`.

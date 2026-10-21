@@ -50,6 +50,10 @@ public final class BrowserClient {
         return send(withJson(HttpRequest.newBuilder(uri(path)), "POST", body), true);
     }
 
+    public Response put(String path, Object body) {
+        return send(withJson(HttpRequest.newBuilder(uri(path)), "PUT", body), true);
+    }
+
     public Response patch(String path, Object body) {
         return send(withJson(HttpRequest.newBuilder(uri(path)), "PATCH", body), true);
     }

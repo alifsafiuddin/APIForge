@@ -9,6 +9,7 @@ import { ProjectsPage } from '@/features/projects/ProjectsPage'
 import { OperationDetailView } from '@/features/specs/OperationDetailView'
 import { SpecificationPage } from '@/features/specs/SpecificationPage'
 import { SpecOverview } from '@/features/specs/SpecOverview'
+import { TestsPage } from '@/features/tests/TestsPage'
 
 import { AppShell } from './layout/AppShell'
 import { NotFoundPage, RouteErrorPage } from './RouteErrorPage'
@@ -53,6 +54,7 @@ export const routes: RouteObject[] = [
                   { path: 'operations/:operationId', element: <OperationDetailView /> },
                 ],
               },
+              { path: 'tests', element: <TestsPage /> },
             ],
           },
           { path: '*', element: <NotFoundPage /> },

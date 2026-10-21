@@ -162,17 +162,25 @@ Finding shape:
 }
 ```
 
-### 2.7 Test cases and generation — Phase 5
+### 2.7 Test cases, suites and generation ✅ Phase 4
+
+The brief moved deterministic generation ahead of execution, so this section is implemented in Phase 4 (ADR-025). Tests are listed, edited and organized here; they are executed by the runs API (§2.5) once execution exists.
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/projects/{projectId}/tests/generate` | `{operationKeys?: [], categories?: []}`. Deterministic generation against the active version; idempotent through the dedupe hash → `{created, unchanged, skippedUnsafe: [{operationKey, category, reason}]}` |
-| GET | `/projects/{projectId}/tests` | `?operationKey=&origin=&reviewStatus=&lifecycleStatus=&category=` paged |
-| POST | `/projects/{projectId}/tests` | Create a manual test |
-| GET | `/projects/{projectId}/tests/{testId}` | Detail |
-| PUT | `/projects/{projectId}/tests/{testId}` | Edit (an edited AI test returns to `PENDING_REVIEW` unless the editor approves in the same request) |
-| POST | `/projects/{projectId}/tests/{testId}/review` | `{decision: "APPROVE" \| "REJECT", note?}` |
-| DELETE | `/projects/{projectId}/tests/{testId}` | Archive (soft delete) |
+| POST | `/projects/{projectId}/tests/generate` | Body `{operationKeys?: []}` (omitted or empty = every operation of the **active** version; unknown keys → 400). Idempotent through the scenario identity → `{specificationVersionId, specificationVersionNumber, operations, created, updated, unchanged, keptUserEdits, archived, total, generatorVersion, skipped: [{operationKey, scenario, reason}]}`. No active version → 409 `NO_ACTIVE_SPECIFICATION`. Audited (`TESTS_GENERATED`) |
+| GET | `/projects/{projectId}/tests/generation-plan?operationKey=` | What generation produces for one operation, without storing anything: `{scenarios: [{scenarioKey, name, category, expectedStatuses}], skipped: [...]}`. The UI uses it to explain what is *not* generated |
+| GET | `/projects/{projectId}/tests` | Paged (default 50, max 100). Filters `operationKey, suiteId, category, origin, enabled, reviewStatus, lifecycleStatus` (archived only when asked for), `q` (name contains). Sort allow-list `name, operationKey, category, sortOrder, updatedAt, createdAt`; default `operationKey, sortOrder, name` |
+| GET | `/projects/{projectId}/tests/summary` | `{total, enabled, stale, operations: [{operationKey, total, enabled, stale}]}` |
+| GET | `/projects/{projectId}/tests/{testId}` | Detail (shape below); archived tests → 404 |
+| PUT | `/projects/{projectId}/tests/{testId}` | `{name, request, expectations: {statuses, summary?, validateResponseSchema?}, rationale?, version}`. Validated (path parameters must match the path; no `Host`, `Content-Length`, `Transfer-Encoding`, `Connection`, `Content-Type`, `Authorization`, `Cookie`, `Proxy-*` headers; no CR/LF; body ≤ 256 KB; statuses `NNN` or `NXX`) → 400 `VALIDATION_ERROR` with per-field `errors`. Marks the test `userModified` (regeneration leaves it alone); an edited AI suggestion returns to `PENDING_REVIEW`. Stale `version` → 409 |
+| PATCH | `/projects/{projectId}/tests/{testId}` | `{enabled?, suiteId?, version}`: enable/disable or move |
+| POST | `/projects/{projectId}/tests/bulk` | `{testIds (1–500), enabled?, suiteId?}` → `{updated}`; any id outside the project → 404 and nothing changes |
+| POST | `/projects/{projectId}/tests/{testId}/review` | `{decision: "APPROVE" \| "REJECT"}`; rejected tests never run |
+| GET, POST | `/projects/{projectId}/test-suites` | Suites with `testCount`; create a CUSTOM suite `{name, description?}` (names unique per project, case-insensitive → 409 `DUPLICATE_NAME`) |
+| PATCH, DELETE | `/projects/{projectId}/test-suites/{suiteId}` | Rename `{name?, description?, version}`; delete only an **empty custom** suite (otherwise 409), so deleting a suite never loses tests |
+
+Tests are not hard-deleted through the API: disable a test to stop it from running; regeneration archives generated tests whose scenario no longer applies.
 
 ### 2.8 Coverage and dashboard — Phase 6
 
@@ -212,15 +220,23 @@ Finding shape:
   "testSummary": { "total": 7, "approved": 6, "pendingReview": 1 }
 }
 
-// Test case
+// Test case (GET /tests/{id})
 {
-  "id": "…", "operationKey": "POST /pets", "name": "Missing required field 'name'",
-  "category": "MISSING_FIELD", "origin": "DETERMINISTIC", "reviewStatus": "APPROVED",
-  "lifecycleStatus": "ACTIVE", "riskLevel": "MUTATING",
-  "request": { "pathParams": {}, "query": {}, "headers": {}, "contentType": "application/json",
-               "body": { "tag": "dog" } },
-  "expectations": { "expectedStatuses": ["400", "422"], "statusClassFallback": "4XX", "validateSchema": true },
-  "rationale": "'name' is listed in required[] of the request schema."
+  "id": "…", "suiteId": "…", "operationKey": "POST /products", "method": "POST", "path": "/products",
+  "name": "Missing required field 'name'", "category": "MISSING_FIELD", "origin": "DETERMINISTIC",
+  "reviewStatus": "APPROVED", "lifecycleStatus": "ACTIVE", "riskLevel": "MUTATING",
+  "enabled": true, "userModified": false, "executable": true,
+  "scenarioKey": "body.missing:/name", "specLocation": "#/components/schemas/NewProduct/required",
+  "rationale": "'name' is listed in 'required' of schema NewProduct. The request omits it.",
+  "generatorVersion": "1", "sourceSpecificationVersionId": "…",
+  "request": { "pathParams": {}, "query": {}, "headers": {},
+               "body": { "mode": "JSON", "contentType": "application/json", "value": { "sku": "HJB-7247", "price": 129.99, "category": "tools" } },
+               "auth": "ENVIRONMENT" },                       // ENVIRONMENT | NONE | INVALID
+  "expectations": { "statuses": ["400", "422"],              // exact codes or classes such as "4XX"
+                    "summary": "Rejected with 400 or 422, the documented client-error responses for invalid input. …",
+                    "validateResponseSchema": true,
+                    "responseChecks": [{ "status": "400", "mediaType": "application/json", "schemaName": "Error" }] },
+  "version": 0
 }
 
 // Coverage metric
