@@ -2,9 +2,9 @@
 
 A full-stack developer tool for **contract-driven API testing**. You import an OpenAPI 3.x specification, explore its endpoints, and generate deterministic test scenarios from its schemas. APIForge AI then runs them against an API you are authorized to test, validates every response against the documented contract, tracks specification coverage, and can ask a **locally hosted** LLM (Ollama) to explain failures.
 
-> **Status: Phase 2 (database design and authentication) complete.**
-> What runs today: user registration and sign-in (server-side sessions, CSRF protection, lockout, rate limiting, audit trail), private API projects (create, edit, archive, delete, search, paging), read-only execution-history endpoints, and the complete database schema for specifications, environments, test suites, test cases, runs and results.
-> Specification import, test generation and execution, contract validation, coverage and AI are **not implemented yet**. See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
+> **Status: Phase 3 (OpenAPI import and explorer) complete.**
+> What runs today: registration and sign-in (sessions, CSRF, lockout, rate limiting, audit trail), private API projects, **OpenAPI 3.0/3.1 import** (file upload or pasted JSON/YAML, strict validation with readable findings, immutable versions, no outbound requests) and a **specification explorer** (searchable endpoints, method badges, parameters, schemas and responses), plus read-only execution-history endpoints.
+> Test generation and execution, contract validation, coverage and AI are **not implemented yet**. See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
 ## Quick start
 
@@ -51,7 +51,9 @@ npm ci
 npm run dev
 ```
 
-Open http://localhost:5173, choose **Create one** to register (password: 12–64 characters, not a common password), and you land on the Overview with your projects and live system health. The Vite dev server proxies `/api` and `/actuator` to the backend, so the browser only talks to one origin and the session cookie stays first-party.
+Open http://localhost:5173, choose **Create one** to register (password: 12–64 characters, not a common password), and you land on the Overview with your projects and live system health.
+
+To try the explorer: create a project, open it, choose **Import specification** and upload [`samples/petstore3-openapi.yaml`](samples/) (the official Swagger Petstore 3 description, 19 endpoints). Importing never contacts the hosts the document mentions. The Vite dev server proxies `/api` and `/actuator` to the backend, so the browser only talks to one origin and the session cookie stays first-party.
 
 ## Commands
 
@@ -79,6 +81,8 @@ All `/api/v1/**` endpoints require a signed-in session unless marked public. Sta
 | `POST /api/v1/auth/register`, `POST /api/v1/auth/login` | Public. Create an account / sign in (starts a session) |
 | `POST /api/v1/auth/logout`, `GET /api/v1/auth/me` | Sign out / current user |
 | `GET, POST /api/v1/projects`; `GET, PATCH, DELETE /api/v1/projects/{id}` | Your projects (paged, searchable, optimistic locking on update) |
+| `POST /api/v1/projects/{id}/specs` (multipart `file` or JSON `{content}`), `POST …/specs/validate` | Import an OpenAPI 3.0/3.1 document as a new version / dry-run check |
+| `GET /api/v1/projects/{id}/specs[/{versionId}[/raw\|/schemas\|/operations[/{operationId}]]]`, `POST …/{versionId}/activate` | Versions, original document, component schemas, endpoint index and detail; activate a version |
 | `GET /api/v1/projects/{id}/runs[/{runId}[/results[/{resultId}]]]` | Execution history (read-only; populated once test execution exists) |
 
 Every response carries an `X-Request-Id` header. Errors use `application/problem+json` with a stable `code`.
@@ -95,6 +99,7 @@ Every response carries an `X-Request-Id` header. Errors use `application/problem
 | `APIFORGE_AUTH_REGISTRATION_ENABLED` | `true` | Allow self-registration |
 | `APIFORGE_COOKIE_SECURE` | `false` (`true` in `prod`) | `Secure` flag on session and CSRF cookies; required over HTTPS |
 | `APIFORGE_SESSION_IDLE_TIMEOUT` / `APIFORGE_SESSION_ABSOLUTE_TIMEOUT` | `30m` / `12h` | Session lifetime |
+| `APIFORGE_SPEC_MAX_SIZE` | `5MB` | Maximum OpenAPI document size |
 | `APIFORGE_BACKEND_URL` (frontend) | `http://localhost:8081` | Where the Vite dev server proxies API calls |
 | `VITE_API_BASE_URL` (frontend) | empty | Set only to call the backend cross-origin instead of through the proxy |
 
@@ -105,6 +110,7 @@ See [.env.example](.env.example) and [frontend/.env.example](frontend/.env.examp
 - **`node -v` shows an old version** (for example v18): another Node installation (Laragon, nvm) comes earlier on `PATH`. Put the Node 24 directory first, and restart your terminal or editor after installing.
 - **`docker` not found right after installing Docker Desktop**: restart the terminal or editor so it picks up the new `PATH`, and make sure Docker Desktop is running.
 - **"Invalid e-mail or password" although the password is right**: after 5 failed attempts sign-in is locked for 15 minutes. Wait, or locally run `docker compose exec postgres psql -U apiforge -d apiforge -c "update users set locked_until = null, failed_login_count = 0 where email = '<you>'"`.
+- **"External reference … is not supported" when importing**: APIForge never fetches other files or URLs. Bundle multi-file specifications into one document first (for example `npx @redocly/cli bundle openapi.yaml -o bundled.yaml`).
 - **Signed out after restarting the backend**: sessions are kept in memory in this version, so a restart ends them.
 - **Backend fails with a connection error**: PostgreSQL is not running or `.env` has a different password from the one the volume was created with. Run `docker compose down -v` to reset the local database (this deletes its data).
 - **Port already in use**: change `APIFORGE_DB_PORT` or `APIFORGE_SERVER_PORT` in `.env`. The frontend dev server uses port 5173 strictly.
@@ -113,7 +119,8 @@ See [.env.example](.env.example) and [frontend/.env.example](frontend/.env.examp
 
 ```
 backend/     Spring Boot 4.1 (Java 21, Maven Wrapper), package-by-feature: auth/, audit/, project/, spec/,
-             environment/, testcase/, execution/, system/, common/, config/ (+ Flyway migrations V1–V6)
+             environment/, testcase/, execution/, system/, common/, config/ (+ Flyway migrations V1–V7)
+samples/     Sample OpenAPI documents to import (with source and license)
 frontend/    React 19 + TypeScript 6 + Vite 8 + Tailwind CSS 4 + shadcn/ui + TanStack Query + React Router
 docs/        Architecture, schema, API design, security, testing, deployment, decisions, status
 .github/     CI workflow and Dependabot

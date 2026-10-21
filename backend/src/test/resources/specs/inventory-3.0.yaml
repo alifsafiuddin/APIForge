@@ -1,0 +1,232 @@
+# Exercises nested and recursive references, arrays, enums, nullable and required fields,
+# referenced parameters/request bodies/responses/headers, and features reported as unsupported.
+openapi: 3.0.3
+info:
+  title: Inventory API
+  version: 2.0.0
+  description: |
+    Warehouse inventory.
+    Multi-line description.
+servers:
+  - url: https://inventory.example.test/api
+tags:
+  - name: orders
+    description: Customer orders
+  - name: products
+security:
+  - bearerAuth: []
+paths:
+  /orders:
+    get:
+      operationId: listOrders
+      tags: [orders]
+      parameters:
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/OrderStatus'
+        - name: session
+          in: cookie
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Orders
+          headers:
+            X-Total-Count:
+              $ref: '#/components/headers/TotalCount'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Order'
+              example:
+                - $ref: this is example data, not a reference
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createOrder
+      tags: [orders]
+      requestBody:
+        $ref: '#/components/requestBodies/NewOrder'
+      callbacks:
+        orderShipped:
+          '{$request.body#/callbackUrl}':
+            post:
+              requestBody:
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/Order'
+              responses:
+                '200':
+                  description: Acknowledged
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '4XX':
+          $ref: '#/components/responses/Problem'
+  /orders/{orderId}:
+    parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getOrder
+      tags: [orders]
+      security: []
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: cancelOrder
+      tags: [orders]
+      deprecated: true
+      responses:
+        '204':
+          description: Cancelled
+  /products/{sku}/image:
+    put:
+      operationId: uploadImage
+      tags: [products]
+      parameters:
+        - name: sku
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Z]{3}-\d{4}$'
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '204':
+          description: Stored
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    oauth:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://auth.example.test/token
+          scopes:
+            inventory: Manage inventory
+  parameters:
+    PageSize:
+      name: pageSize
+      in: query
+      description: Items per page
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+  headers:
+    TotalCount:
+      description: Total number of items
+      schema:
+        type: integer
+  requestBodies:
+    NewOrder:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/NewOrder'
+  responses:
+    Unauthorized:
+      description: Authentication required
+    Problem:
+      description: Problem details
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    OrderStatus:
+      type: string
+      enum: [PENDING, SHIPPED, CANCELLED]
+    NewOrder:
+      type: object
+      required: [lines]
+      properties:
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/OrderLine'
+        note:
+          type: string
+          nullable: true
+          maxLength: 500
+        callbackUrl:
+          type: string
+          format: uri
+    Order:
+      allOf:
+        - $ref: '#/components/schemas/NewOrder'
+        - type: object
+          required: [id, status]
+          properties:
+            id:
+              type: string
+              format: uuid
+            status:
+              $ref: '#/components/schemas/OrderStatus'
+    OrderLine:
+      type: object
+      required: [product, quantity]
+      properties:
+        product:
+          $ref: '#/components/schemas/Product'
+        quantity:
+          type: integer
+          minimum: 1
+    Product:
+      type: object
+      required: [sku]
+      properties:
+        sku:
+          type: string
+        category:
+          $ref: '#/components/schemas/Category'
+    Category:
+      type: object
+      properties:
+        name:
+          type: string
+        parent:
+          $ref: '#/components/schemas/Category'
+    Problem:
+      type: object
+      properties:
+        title:
+          type: string
+        status:
+          type: integer

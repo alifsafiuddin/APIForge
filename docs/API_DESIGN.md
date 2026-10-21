@@ -1,6 +1,6 @@
 # API Design
 
-> Status: conventions, error format, system endpoints and Actuator (Phase 1), plus authentication, projects and read-only execution history (Phase 2) are **implemented** (marked ✅). Every other endpoint is still a plan, marked with the phase that delivers it.
+> Status: conventions, error format, system endpoints and Actuator (Phase 1), authentication, projects and read-only execution history (Phase 2), and specification import and exploration (Phase 3) are **implemented** (marked ✅). Every other endpoint is still a plan, marked with the phase that delivers it.
 
 ## 1. Conventions
 
@@ -39,7 +39,7 @@
 | 500 | `INTERNAL_ERROR` (details logged server-side under the `requestId`) |
 | 409 | `CONFLICT` (generic integrity conflict), `STALE_VERSION` (optimistic lock), `DUPLICATE_NAME`, `EMAIL_TAKEN` |
 | 413 | `PAYLOAD_TOO_LARGE` |
-| 422 | `SPEC_INVALID`, `SPEC_EXTERNAL_REF`, `DESTINATION_BLOCKED` |
+| 422 | `SPEC_INVALID` (with `messages[]`), later `DESTINATION_BLOCKED` |
 | 429 | `RATE_LIMITED` (with `Retry-After`), later `AI_BUSY` |
 | 503 | `AI_UNAVAILABLE` (only where no fallback applies) |
 
@@ -84,19 +84,26 @@ Planned (not implemented): `PATCH /users/me` (display name) and `POST /users/me/
 
 A project owned by someone else returns exactly the same 404 as a non-existent one; the attempt is recorded as a `CROSS_USER_ACCESS_DENIED` audit event.
 
-### 2.3 Specifications and operations — Phase 3
+### 2.3 Specifications and operations — Phase 3 ✅ implemented
+
+Base: `/projects/{projectId}/specs`. Every call requires owning the project (others get 404).
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/projects/{projectId}/specs/validate` | Dry-run parse (multipart `file` or JSON `{content}`), returns messages, persists nothing |
-| POST | `/projects/{projectId}/specs` | Import a new immutable version. `?activate=true` (default) → 201 `{version, warnings, operationCount, staleTestCount}` |
-| GET | `/projects/{projectId}/specs` | List versions (number, title, imported at, hash, operation count, active flag) |
-| GET | `/projects/{projectId}/specs/{versionId}` | Version detail: info, servers, security schemes, tags, messages |
-| GET | `/projects/{projectId}/specs/{versionId}/raw` | Original content (`text/plain`, `Content-Disposition: attachment`) |
-| POST | `/projects/{projectId}/specs/{versionId}/activate` | Make an older version active (re-marks stale tests) |
-| GET | `/projects/{projectId}/specs/{versionId}/diff?against={otherId}` | Added, removed and changed operation keys *(Phase 5, if time permits; not required)* |
-| GET | `/projects/{projectId}/operations` | `?specVersionId=&tag=&method=&q=` summary list (defaults to active version) |
-| GET | `/projects/{projectId}/operations/{operationId}` | Full detail: parameters, request body, responses with schemas, security requirements |
+| POST | `` (multipart, part `file`) | Import an uploaded file as a new immutable version. `?activate=true` (default; the first version is always activated) → 201 `{version, messages}` + `Location`. 422 `SPEC_INVALID` with `messages[]` when the document is rejected; 413 `PAYLOAD_TOO_LARGE` above 5 MB |
+| POST | `` (JSON `{content, sourceName?}`) | Same, for pasted text |
+| POST | `/validate` (multipart or JSON) | Dry run: always 200 `{valid, openapiVersion, title, apiVersion, operationCount, messages}`; persists nothing |
+| GET | `` | Paged versions, newest first: number, title, versions, format, source name, operation and warning counts, active flag, SHA-256, size, import time |
+| GET | `/{versionId}` | `{summary, description, servers, securitySchemes, tags, messages}` |
+| POST | `/{versionId}/activate` | Make a version active; tests whose operation is missing become `STALE`, stale tests whose operation is back become `ACTIVE` |
+| GET | `/{versionId}/raw` | The original document byte for byte, `text/plain; charset=UTF-8`, `Content-Disposition: attachment; filename="specification-v{n}.{yaml\|json}"` |
+| GET | `/{versionId}/schemas` | Component schemas (`components.schemas`), used to resolve `$ref`s in operation schemas |
+| GET | `/{versionId}/operations` | All operations in document order: `{id, operationKey, method, path, operationId, summary, tags, deprecated, warningCount}`. Not paged: the import limit (2,000 operations) bounds it, and the explorer needs the full index for client-side search |
+| GET | `/{versionId}/operations/{operationId}` | `{…summary fields, description, parameters, requestBody, responses, security, warnings}` |
+
+**Import messages** (in `messages[]`, persisted with the version): `{severity: ERROR|WARNING|INFO, code, message, location?}`. Any ERROR rejects the document. Codes: `EMPTY_DOCUMENT`, `INVALID_ENCODING`, `PARSE_ERROR`, `DUPLICATE_KEY`, `LIMIT_EXCEEDED`, `NOT_AN_OBJECT`, `UNSUPPORTED_VERSION`, `MISSING_FIELD`, `INVALID_FIELD`, `UNEXPECTED_FIELD`, `UNDECLARED_PATH_PARAMETER`, `EXTERNAL_REFERENCE`, `UNRESOLVED_REFERENCE`, `INVALID_REFERENCE`, `DUPLICATE_OPERATION_ID`, `AMBIGUOUS_PATH`, `UNSUPPORTED_FEATURE`, `NO_OPERATIONS`, `NO_SERVERS`, `IDENTICAL_CONTENT`, `PARSER_NOTICE`. `location` is a line/column for syntax errors and a document path (e.g. `paths["/pets/{id}"].get`) otherwise.
+
+**Normalized operation content**: parameters are the effective set (path-level merged with operation-level, the operation wins on name + location) with `$ref`s to `components.parameters` resolved; request bodies, responses and response headers likewise; responses are ordered numerically with `default` last; `security` is the effective requirement list (an empty list means "no authentication"). Schema `$ref`s are kept and resolved against `/schemas`, which keeps recursive schemas finite.
 
 ### 2.4 Environments — Phase 3
 

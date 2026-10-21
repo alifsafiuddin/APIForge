@@ -32,6 +32,14 @@ export type ProjectListParams = {
 export const projectKeys = {
   all: ['projects'] as const,
   list: (params: ProjectListParams) => ['projects', 'list', params] as const,
+  detail: (projectId: string) => ['projects', 'detail', projectId] as const,
+}
+
+export function useProject(projectId: string) {
+  return useQuery({
+    queryKey: projectKeys.detail(projectId),
+    queryFn: ({ signal }) => apiRequest(`/api/v1/projects/${encodeURIComponent(projectId)}`, projectSchema, { signal }),
+  })
 }
 
 export function useProjects(params: ProjectListParams) {

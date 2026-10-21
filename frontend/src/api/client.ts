@@ -29,6 +29,8 @@ export class ApiError extends Error {
   readonly code: string
   readonly requestId: string | undefined
   readonly fieldErrors: FieldError[]
+  /** The full problem document, for endpoint-specific members (e.g. import `messages`). */
+  readonly problem: unknown
 
   constructor(options: {
     message: string
@@ -36,6 +38,7 @@ export class ApiError extends Error {
     code: string
     requestId?: string | undefined
     fieldErrors?: FieldError[]
+    problem?: unknown
   }) {
     super(options.message)
     this.name = 'ApiError'
@@ -43,6 +46,7 @@ export class ApiError extends Error {
     this.code = options.code
     this.requestId = options.requestId
     this.fieldErrors = options.fieldErrors ?? []
+    this.problem = options.problem
   }
 }
 
@@ -123,7 +127,9 @@ export async function apiRequest<T>(path: string, schema: z.ZodType<T>, options:
 
 async function send(path: string, method: string, options: RequestOptions, csrf: string | undefined) {
   const headers: Record<string, string> = { Accept: 'application/json, application/problem+json' }
-  if (options.body !== undefined) {
+  const isForm = options.body instanceof FormData
+  // FormData sets its own multipart Content-Type (with boundary); everything else is JSON.
+  if (options.body !== undefined && !isForm) {
     headers['Content-Type'] = 'application/json'
   }
   if (csrf) {
@@ -133,7 +139,7 @@ async function send(path: string, method: string, options: RequestOptions, csrf:
     return await fetch(`${API_BASE_URL}${path}`, {
       method,
       headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body: options.body === undefined ? undefined : isForm ? (options.body as FormData) : JSON.stringify(options.body),
       signal: options.signal,
       credentials,
     })
@@ -171,6 +177,7 @@ function toApiError(response: Response, payload: unknown, headerRequestId: strin
       code: problem.data.code,
       requestId: problem.data.requestId ?? headerRequestId,
       fieldErrors: problem.data.errors,
+      problem: payload,
     })
   }
   // No problem body: typically the dev proxy reporting that the backend is down (502/504).

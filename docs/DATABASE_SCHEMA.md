@@ -1,8 +1,8 @@
 # Database Schema
 
-> Status: **implemented through Phase 2** (migrations V1–V6). The Flyway migrations in
+> Status: **implemented through Phase 3** (migrations V1–V7). The Flyway migrations in
 > `backend/src/main/resources/db/migration` are the source of truth; this document explains them.
-> Tables for operations (`api_operations`) and validation findings are added by the phases that use them.
+> The table for validation findings is added with contract validation.
 
 - PostgreSQL 18. Schema changes go through **Flyway only**; Hibernate runs with `ddl-auto=validate`, so every build checks that entities match the migrated schema.
 - Primary keys are `uuid`, generated in the application as **UUIDv7** (time-ordered, index-friendly). Timestamps are `timestamptz` and come from the injectable `Clock`.
@@ -17,6 +17,7 @@ erDiagram
     users |o--o{ audit_events : "subject of"
     api_projects ||--o{ specification_versions : "has versions"
     api_projects |o--o| specification_versions : "active version"
+    specification_versions ||--o{ api_operations : contains
     api_projects ||--o{ environments : has
     environments ||--o{ environment_variables : has
     api_projects ||--o{ test_suites : has
@@ -78,8 +79,31 @@ erDiagram
         jsonb servers
         jsonb security_schemes
         jsonb import_messages
+        varchar source_name
+        text description
+        jsonb tags
+        jsonb component_schemas
+        int operation_count
         uuid imported_by FK "SET NULL"
         timestamptz imported_at
+    }
+    api_operations {
+        uuid id PK
+        uuid specification_version_id FK "CASCADE"
+        int sort_order
+        varchar operation_key UK "METHOD + space + path"
+        varchar method
+        varchar path
+        varchar operation_id
+        varchar summary
+        text description
+        jsonb tags
+        boolean deprecated
+        jsonb parameters "refs resolved"
+        jsonb request_body "refs resolved"
+        jsonb responses "ordered, refs resolved"
+        jsonb security "effective"
+        jsonb warnings
     }
     environments {
         uuid id PK
@@ -192,8 +216,9 @@ erDiagram
 | `V4__environments.sql` | `environments`, `environment_variables` |
 | `V5__test_suites_and_test_cases.sql` | `test_suites`, `test_cases` |
 | `V6__test_runs_and_test_results.sql` | `test_runs`, `test_results` (+ immutability trigger) |
+| `V7__api_operations_and_spec_metadata.sql` | `api_operations` (+ immutability trigger); `specification_versions` gains `source_name`, `description`, `tags`, `component_schemas`, `operation_count`; audit types `SPECIFICATION_IMPORTED`, `SPECIFICATION_ACTIVATED` |
 
-Applied migrations are never edited; corrections are new migrations. Verified both on an empty database (Testcontainers) and incrementally on the Phase 1 development database (V1 → V6).
+Applied migrations are never edited; corrections are new migrations. Verified on an empty database (Testcontainers) and incrementally on the development database (V1 → V6 in Phase 2, V6 → V7 in Phase 3).
 
 ## 3. Integrity rules enforced by the database
 
@@ -206,7 +231,7 @@ Applied migrations are never edited; corrections are new migrations. Verified bo
 | AI-suggested tests need an explicit human review to be approved | `ck_test_cases_ai_review`: `origin = AI_SUGGESTED AND review_status = APPROVED ⇒ reviewed_at NOT NULL` |
 | A result never claims PASSED without a real response | `ck_test_results_passed_has_response`; an ERROR always has an `error_kind` |
 | Run counters are consistent | Non-negative, and outcome counts never exceed `total_count`; `created_at ≤ started_at ≤ finished_at` |
-| History cannot be rewritten | Triggers reject `UPDATE` on `test_results`, `specification_versions` and `audit_events`, except the `SET NULL` caused by deleting a referenced user or test case |
+| History cannot be rewritten | Triggers reject `UPDATE` on `test_results`, `specification_versions`, `api_operations` and `audit_events`, except the `SET NULL` caused by deleting a referenced user or test case |
 | Enumerations are closed | `CHECK (… IN (…))` on every status/kind/category column, mirrored by Java enums |
 | Names unique where it matters | Active project names per owner (case-insensitive, partial index on `archived_at IS NULL`); environment and suite names per project |
 | Regeneration is idempotent | Partial unique index `(project_id, dedupe_hash)` for non-archived test cases |
@@ -232,4 +257,5 @@ Beyond primary keys and the unique constraints above: `api_projects(owner_id, up
 - **Audit events are stored** for security-relevant actions: `USER_REGISTERED`, `LOGIN_SUCCEEDED`, `LOGIN_FAILED`, `ACCOUNT_LOCKED`, `LOGOUT`, `PROJECT_CREATED`, `PROJECT_DELETED`, `CROSS_USER_ACCESS_DENIED`. `subject` holds the e-mail used in a failed sign-in (so attacks on unknown accounts are visible); logs only ever contain user ids.
 - **Entities reference each other by id** (no JPA associations). Every lookup goes through an owner- or project-scoped repository method, which keeps authorization explicit and avoids lazy-loading surprises with `open-in-view=false`.
 - `test_runs` has no `version` column: runs are written by a single executor; results are append-only.
-- `api_operations` (parsed operations per spec version) and `validation_findings` arrive with specification import and contract validation respectively.
+- `api_operations` stores one row per (method, path) of a version. `operation_key` (`GET /pets/{petId}`, checked by `ck_api_operations_key`) is the stable identity that links test cases and results across versions; re-importing never edits old rows, and test cases whose key disappears become `STALE`.
+- `validation_findings` arrives with contract validation.

@@ -11,6 +11,7 @@ import jakarta.validation.constraints.Pattern;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
+import org.springframework.util.unit.DataSize;
 import org.springframework.validation.annotation.Validated;
 
 /**
@@ -19,7 +20,8 @@ import org.springframework.validation.annotation.Validated;
  */
 @Validated
 @ConfigurationProperties(prefix = "apiforge")
-public record ApiForgeProperties(@Valid @NotNull @DefaultValue Cors cors, @Valid @NotNull @DefaultValue Auth auth) {
+public record ApiForgeProperties(@Valid @NotNull @DefaultValue Cors cors, @Valid @NotNull @DefaultValue Auth auth,
+        @Valid @NotNull @DefaultValue Specification specification) {
 
     /**
      * CORS settings for browser clients served from a different origin than the API
@@ -47,5 +49,19 @@ public record ApiForgeProperties(@Valid @NotNull @DefaultValue Cors cors, @Valid
             @DefaultValue("5") @Min(1) int registrationRequestsPerMinute,
             /* Marks session and CSRF cookies Secure; must be true whenever the app is served over HTTPS. */
             @DefaultValue("false") boolean secureCookies) {
+    }
+
+    /**
+     * Limits applied to imported OpenAPI documents (docs/SECURITY.md section 5). They bound memory
+     * and CPU use for untrusted input; documents beyond them are rejected with a clear message.
+     */
+    public record Specification(
+            /* Maximum document size; uploads and pasted text alike. */
+            @NotNull @DefaultValue("5MB") DataSize maxSize,
+            @DefaultValue("2000") @Min(1) @Max(20000) int maxOperations,
+            /* Maximum nesting depth of objects and arrays in the document. */
+            @DefaultValue("100") @Min(10) @Max(1000) int maxNestingDepth,
+            /* YAML anchors/aliases referencing collections (protects against "billion laughs"). */
+            @DefaultValue("50") @Min(0) @Max(1000) int maxYamlAliases) {
     }
 }

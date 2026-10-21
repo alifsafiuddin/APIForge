@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: **Phase 2**. Implemented: backend foundation (`common`, `config`, `system`), the full persistence model (all entities and migrations V1–V6), authentication (`auth`), auditing (`audit`), projects (`project`), read-only execution history (`execution`), ArchUnit-enforced layering, and the frontend shell with sign-in, registration and project management. Everything else here is design. See [PROJECT_STATUS.md](PROJECT_STATUS.md).
+> Status: **Phase 2**. Implemented: backend foundation (`common`, `config`, `system`), the full persistence model (all entities and migrations V1–V6), authentication (`auth`), auditing (`audit`), projects (`project`), read-only execution history (`execution`), OpenAPI import and exploration (`spec`), ArchUnit-enforced layering, and the frontend with sign-in, registration, project management and the specification explorer. Everything else here is design. See [PROJECT_STATUS.md](PROJECT_STATUS.md).
 
 ## 1. Goals and non-goals
 
@@ -224,8 +224,8 @@ React SPA (Vite, TypeScript 6.0, Tailwind CSS 4, shadcn/ui on Radix primitives, 
 | `/` | Overview dashboard | ✅ recent projects + system status; later recent runs, pass/fail trend, coverage summary |
 | `/projects` | API projects ✅ | List (search, sort, active/archived, paging), create, edit, archive/restore, delete (typed confirmation) |
 | `/projects/:projectId` | Project overview | Active spec, environments, last run, coverage tile |
-| `/projects/:projectId/spec` | Specification explorer | Versions, servers, security schemes, tag/path tree, import/re-import |
-| `/projects/:projectId/endpoints/:operationId` | Endpoint detail | Params, bodies, responses, auth, tests for this endpoint, ad hoc send |
+| `/projects/:projectId/spec` | Specification explorer ✅ | Version selector (activate older versions), searchable endpoint index grouped by tag with method filters, version overview (servers, security schemes, tags, import findings, original download), import dialog (upload or paste, dry-run check) |
+| `/projects/:projectId/spec/operations/:operationId` | Endpoint detail ✅ | Parameters by location, request body and responses per media type with an expandable schema viewer (references, enums, nullable, required, constraints, recursion), effective security, import warnings; later: tests for this endpoint and ad hoc send |
 | `/projects/:projectId/tests` | Test generation workspace | Generate deterministic tests, AI suggestions review queue, edit tests |
 | `/projects/:projectId/runs` | Execution history | Filterable list of runs |
 | `/projects/:projectId/runs/:runId` | Test execution results + contract validation report | Per-test outcomes, findings grouped by rule/severity |

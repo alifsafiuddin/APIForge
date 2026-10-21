@@ -1,6 +1,6 @@
 # Security
 
-> Status: §3 (authentication and sessions), §4 (authorization) and the secrets-at-rest database constraint are **implemented and tested (Phase 2)**. All other sections remain requirements for later phases; each control is marked when its phase delivers it.
+> Status: §3 (authentication and sessions), §4 (authorization) and the secrets-at-rest database constraint (Phase 2), and §5 (untrusted OpenAPI documents, Phase 3) are **implemented and tested**. All other sections remain requirements for later phases; each control is marked when its phase delivers it.
 
 APIForge AI makes HTTP requests to user-supplied URLs, stores credentials for those APIs, parses untrusted documents, and sends data to an LLM. Each of these is a significant attack surface. This document is the threat model and the list of required controls.
 
@@ -72,15 +72,19 @@ ADR-008 records why session + CSRF was chosen over JWT in `localStorage`.
 - **Architecture level**: ArchUnit rules forbid controllers and the web layer from touching repositories or entities, so authorization cannot be bypassed by a controller querying the database directly (`ArchitectureTest`).
 - Verified by `CrossUserAccessIntegrationTest`: a second user receives 404 on every project-scoped read endpoint (project, runs, run, results, result), cannot update or delete, sees only their own projects in listings, cannot reach another project's run through their own project id, and the owner's data is unchanged afterwards.
 
-## 5. Untrusted OpenAPI documents
+## 5. Untrusted OpenAPI documents ✅ Phase 3
 
-| Threat | Control |
-|---|---|
-| SSRF or local file read through external `$ref` (`http://…`, `file:…`, relative paths) | Before parsing, the document is read into a tree and **every** `$ref` must start with `#/`; otherwise the import fails with `SPEC_EXTERNAL_REF`. Content is passed to swagger-parser with `readContents` (no location), so relative refs cannot resolve. Unit tests cover `http`, `https`, `file`, relative, protocol-relative and encoded variants |
-| `servers[].url` used as a request target | Servers are **informational**. They can prefill an environment's base URL, but that URL is still subject to the outbound policy at execution time |
-| YAML bombs, deep nesting, huge documents | Upload limit 5 MB (multipart and body limits). SnakeYAML `LoaderOptions` limits (aliases ≤ 50, nesting depth ≤ 100, code points ≤ 5 M) applied when we parse. Jackson `StreamReadConstraints` (depth, string length). Parsing is time-boxed |
-| ReDoS through schema `pattern` applied to response strings | Response body cap (2 MB). Validation runs with a deadline, using a deadline-checking `CharSequence` wrapper or a linear-time regex engine supported by the JSON Schema validator. The Phase 4 spike decides which. A pattern that times out yields `INCONCLUSIVE`, never `PASSED` |
-| XSS through descriptions, summaries or examples | Rendered as text. Markdown rendering has raw HTML disabled. CSP blocks inline script |
+| Threat | Control | Verified by |
+|---|---|---|
+| SSRF or local file read through external `$ref` (`http(s)://…`, `file:`, relative and protocol-relative paths) | `ReferenceGuard` checks every `$ref` **before** the OpenAPI parser runs: only local JSON pointers (`#/…`) that resolve inside the document are accepted; anything else rejects the import (`EXTERNAL_REFERENCE`, `UNRESOLVED_REFERENCE`, `INVALID_REFERENCE`). The parser then receives the document as a JSON string (`readContents`, no location), so there is nothing it could fetch | `SpecificationAnalyzerTest.externalReferencesAreRejectedBeforeParsing` (7 forms incl. the cloud-metadata IP), `SpecificationImportIntegrationTest.externalReferenceIsRejectedWithoutAnyOutboundRequest` (a live local server receives **0** requests) |
+| `servers[].url` used as a request target | Servers are informational only; requests use an environment's base URL, which passes the outbound policy | (Phase 4) |
+| YAML "billion laughs", recursive anchors, deep nesting, huge documents | 5 MB limit (multipart limits, a request-size filter for every body including chunked ones, and a service check); YAML loaded with SnakeYAML under explicit limits: ≤ 50 aliases to collections, nesting depth ≤ 100, code-point limit, no duplicate or recursive keys, recursive structures rejected; JSON parsed with Jackson stream constraints (depth, string and document length) | `SpecificationAnalyzerTest` (alias bomb, recursive anchor, nesting), `RequestSizeLimitFilterTest`, `oversizedUploadIsRejectedWith413`, `oversizedPastedTextIsRejectedWith413` |
+| Duplicate keys hiding paths or operations | Rejected for YAML and JSON (`DUPLICATE_KEY`, with line and column) | `duplicateYamlKeysAreRejected`, `duplicateJsonKeysAreRejected` |
+| Binary or mis-encoded input | Strict UTF-8 decoding (BOM accepted), NUL bytes rejected | `emptyBinaryAndNonObjectDocumentsAreRejected` |
+| Excessive operation count | ≤ 2,000 operations (configurable) | `operationCountLimitIsEnforced` |
+| ReDoS through schema `pattern` applied to response strings | Not reachable yet (no validation runs). Phase 4: response body cap and a validation deadline or linear-time regex | (Phase 4 spike) |
+| XSS through descriptions, summaries, examples | The explorer renders every spec-supplied string as text (no HTML, Markdown shown verbatim); covered by oxlint `react/no-danger` and a component test that injects markup | `SchemaView.test.tsx` ("treats description text as text, not markup") |
+| Downloaded original rendered by the browser | Served as `text/plain` with `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff` | `originalDocumentIsStoredByteForByte` |
 
 ## 6. Outbound request safety (SSRF) — the `outbound` module
 
@@ -197,7 +201,7 @@ Other client settings:
 
 - ✅ API responses (Phase 2): `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store` (Spring Security defaults) — verified by `ApplicationIntegrationTest.responsesCarrySecurityHeaders`.
 - Planned for the SPA's HTML (Phase 8, nginx): `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`, plus `Strict-Transport-Security`.
-- Request size limits: multipart 5 MB, JSON body 2 MB (with spec import).
+- ✅ Request size limits (Phase 3): uploads 5 MB per file / 6 MB per request; every request body is capped at the specification limit plus 20% + 64 KB (`RequestSizeLimitFilter`, also for chunked bodies).
 - ✅ Bean Validation on all inputs, and unknown JSON properties rejected.
 - ✅ Errors are generic, with a request id. Stack traces are never returned.
 - ✅ Actuator exposes only `health` and `info`.
@@ -216,7 +220,7 @@ Other client settings:
 | T1 | SSRF to internal services or metadata via base URL | Info disclosure / EoP | Critical | §6.2 blocklist, guarded DNS, trusted list | `AddressClassifierTest` (table), `OutboundGuardIT` |
 | T2 | DNS rebinding between check and connect | Info disclosure | High | Resolver used for connect is the validated one | `GuardedDnsResolverTest` with fake DNS returning different answers per call |
 | T3 | Redirect to internal address | Info disclosure | High | Manual redirects, revalidated per hop | WireMock IT: public → 302 → 127.0.0.1 is blocked |
-| T4 | External `$ref` fetch during import | SSRF / LFI | High | §5 ref guard | `RefGuardTest` |
+| T4 | External `$ref` fetch during import | SSRF / LFI | High | §5 reference guard before parsing | ✅ `SpecificationAnalyzerTest`, `SpecificationImportIntegrationTest` (0 outbound requests) |
 | T5 | IDOR across projects | Info disclosure / Tampering | High | Ownership checks, 404, composite FKs | ✅ `CrossUserAccessIntegrationTest`, `SchemaIntegrationTest` |
 | T6 | Secret leakage (API, logs, history, AI) | Info disclosure | High | §7 | Redaction unit tests, log-capture IT, API response IT |
 | T7 | CSRF on state-changing endpoints | Tampering | Medium | CSRF tokens | ✅ `AuthIntegrationTest`, `ApiExceptionHandlerTest` |

@@ -46,6 +46,11 @@ public class Project extends AuditableEntity {
         this.description = description;
     }
 
+    /** The version the explorer, test generation and validation use by default. */
+    public void activateSpecification(UUID specificationVersionId) {
+        this.activeSpecificationVersionId = specificationVersionId;
+    }
+
     public void archive(Instant now) {
         if (archivedAt == null) {
             archivedAt = now;

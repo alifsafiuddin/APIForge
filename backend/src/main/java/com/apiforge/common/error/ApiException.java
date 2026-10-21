@@ -1,6 +1,7 @@
 package com.apiforge.common.error;
 
 import java.util.List;
+import java.util.Map;
 
 import com.apiforge.common.error.Problems.FieldErrorItem;
 
@@ -14,15 +15,22 @@ public class ApiException extends RuntimeException {
 
     private final ErrorCode code;
     private final transient List<FieldErrorItem> fieldErrors;
+    private final transient Map<String, Object> properties;
 
     public ApiException(ErrorCode code, String detail) {
         this(code, detail, List.of());
     }
 
     public ApiException(ErrorCode code, String detail, List<FieldErrorItem> fieldErrors) {
+        this(code, detail, fieldErrors, Map.of());
+    }
+
+    /** @param properties extra problem members (for example a list of import messages) */
+    public ApiException(ErrorCode code, String detail, List<FieldErrorItem> fieldErrors, Map<String, Object> properties) {
         super(detail);
         this.code = code;
         this.fieldErrors = List.copyOf(fieldErrors);
+        this.properties = Map.copyOf(properties);
     }
 
     public ErrorCode code() {
@@ -31,6 +39,10 @@ public class ApiException extends RuntimeException {
 
     public List<FieldErrorItem> fieldErrors() {
         return fieldErrors;
+    }
+
+    public Map<String, Object> properties() {
+        return properties;
     }
 
     /** The standard response for a missing resource, also used when the caller does not own it. */

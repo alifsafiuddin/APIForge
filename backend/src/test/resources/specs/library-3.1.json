@@ -1,0 +1,40 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Library", "version": "0.3.0" },
+  "paths": {
+    "/books/{isbn}": {
+      "get": {
+        "operationId": "getBook",
+        "parameters": [{ "name": "isbn", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "A book",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Book" } } }
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {
+    "bookReturned": {
+      "post": {
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Book" } } } },
+        "responses": { "200": { "description": "Acknowledged" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Book": {
+        "type": "object",
+        "required": ["isbn", "title"],
+        "properties": {
+          "isbn": { "type": "string" },
+          "title": { "type": "string" },
+          "subtitle": { "type": ["string", "null"] },
+          "genres": { "type": "array", "items": { "type": "string", "enum": ["fiction", "science", "history"] } }
+        }
+      }
+    }
+  }
+}

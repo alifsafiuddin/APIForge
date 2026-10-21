@@ -3,9 +3,12 @@ package com.apiforge.project.repository;
 import java.util.Optional;
 import java.util.UUID;
 
+import jakarta.persistence.LockModeType;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -15,6 +18,11 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
 
     /** The only way services load a project: scoped to its owner. */
     Optional<Project> findByIdAndOwnerId(UUID id, UUID ownerId);
+
+    /** Owner-scoped and row-locked, for changes that must be serialized per project (version numbering). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Project p where p.id = :id and p.ownerId = :ownerId")
+    Optional<Project> findByIdAndOwnerIdForUpdate(@Param("id") UUID id, @Param("ownerId") UUID ownerId);
 
     /**
      * @param namePattern a LIKE pattern with %, _ and \ already escaped, or {@code null} for no filter

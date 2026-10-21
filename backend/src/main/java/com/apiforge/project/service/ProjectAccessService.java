@@ -40,6 +40,12 @@ public class ProjectAccessService {
         return projects.findByIdAndOwnerId(projectId, userId).orElseThrow(() -> denied(projectId, userId));
     }
 
+    /** As {@link #requireOwned}, additionally locking the project row until the transaction ends. */
+    @Transactional
+    public Project requireOwnedForUpdate(UUID projectId, UUID userId) {
+        return projects.findByIdAndOwnerIdForUpdate(projectId, userId).orElseThrow(() -> denied(projectId, userId));
+    }
+
     private ApiException denied(UUID projectId, UUID userId) {
         if (projects.existsById(projectId)) {
             log.warn("User {} attempted to access project {} owned by another user", userId, projectId);

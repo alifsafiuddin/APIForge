@@ -18,9 +18,8 @@ import org.hibernate.annotations.UuidGenerator;
 import org.hibernate.type.SqlTypes;
 
 /**
- * An imported OpenAPI document. Immutable: re-importing creates a new version, so test history
- * always refers to the exact contract it was validated against. Import logic arrives with the
- * specification import feature; this phase defines the persistent model.
+ * An imported OpenAPI document. Immutable (also enforced by a database trigger): re-importing
+ * creates a new version, so test history always refers to the exact contract it ran against.
  */
 @Entity
 @Immutable
@@ -29,6 +28,14 @@ public class SpecificationVersion {
 
     public enum SourceFormat {
         JSON, YAML
+    }
+
+    /** Everything known about an imported document, in one value to keep construction readable. */
+    public record Contents(String openapiVersion, String title, String apiVersion, String description,
+            SourceFormat sourceFormat, String sourceName, String rawContent, String contentSha256,
+            int contentSizeBytes, List<Map<String, Object>> servers, Map<String, Object> securitySchemes,
+            List<Map<String, Object>> tags, Map<String, Object> componentSchemas, int operationCount,
+            List<Map<String, Object>> importMessages) {
     }
 
     @Id
@@ -50,9 +57,15 @@ public class SpecificationVersion {
     @Column(name = "api_version", length = 100)
     private String apiVersion;
 
+    @Column(name = "description", columnDefinition = "text")
+    private String description;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "source_format", nullable = false, length = 10)
     private SourceFormat sourceFormat;
+
+    @Column(name = "source_name", length = 255)
+    private String sourceName;
 
     @Column(name = "raw_content", nullable = false, columnDefinition = "text")
     private String rawContent;
@@ -73,6 +86,17 @@ public class SpecificationVersion {
     private Map<String, Object> securitySchemes;
 
     @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "tags", nullable = false)
+    private List<Map<String, Object>> tags;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "component_schemas", nullable = false)
+    private Map<String, Object> componentSchemas;
+
+    @Column(name = "operation_count", nullable = false)
+    private int operationCount;
+
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "import_messages", nullable = false)
     private List<Map<String, Object>> importMessages;
 
@@ -85,22 +109,25 @@ public class SpecificationVersion {
     protected SpecificationVersion() {
     }
 
-    public SpecificationVersion(UUID projectId, int versionNumber, String openapiVersion, String title,
-            String apiVersion, SourceFormat sourceFormat, String rawContent, String contentSha256,
-            int contentSizeBytes, List<Map<String, Object>> servers, Map<String, Object> securitySchemes,
-            List<Map<String, Object>> importMessages, UUID importedBy, Instant importedAt) {
+    public SpecificationVersion(UUID projectId, int versionNumber, Contents contents, UUID importedBy,
+            Instant importedAt) {
         this.projectId = projectId;
         this.versionNumber = versionNumber;
-        this.openapiVersion = openapiVersion;
-        this.title = title;
-        this.apiVersion = apiVersion;
-        this.sourceFormat = sourceFormat;
-        this.rawContent = rawContent;
-        this.contentSha256 = contentSha256;
-        this.contentSizeBytes = contentSizeBytes;
-        this.servers = List.copyOf(servers);
-        this.securitySchemes = Map.copyOf(securitySchemes);
-        this.importMessages = List.copyOf(importMessages);
+        this.openapiVersion = contents.openapiVersion();
+        this.title = contents.title();
+        this.apiVersion = contents.apiVersion();
+        this.description = contents.description();
+        this.sourceFormat = contents.sourceFormat();
+        this.sourceName = contents.sourceName();
+        this.rawContent = contents.rawContent();
+        this.contentSha256 = contents.contentSha256();
+        this.contentSizeBytes = contents.contentSizeBytes();
+        this.servers = List.copyOf(contents.servers());
+        this.securitySchemes = Map.copyOf(contents.securitySchemes());
+        this.tags = List.copyOf(contents.tags());
+        this.componentSchemas = Map.copyOf(contents.componentSchemas());
+        this.operationCount = contents.operationCount();
+        this.importMessages = List.copyOf(contents.importMessages());
         this.importedBy = importedBy;
         this.importedAt = importedAt;
     }
@@ -129,8 +156,16 @@ public class SpecificationVersion {
         return apiVersion;
     }
 
+    public String getDescription() {
+        return description;
+    }
+
     public SourceFormat getSourceFormat() {
         return sourceFormat;
+    }
+
+    public String getSourceName() {
+        return sourceName;
     }
 
     public String getRawContent() {
@@ -151,6 +186,18 @@ public class SpecificationVersion {
 
     public Map<String, Object> getSecuritySchemes() {
         return securitySchemes;
+    }
+
+    public List<Map<String, Object>> getTags() {
+        return tags;
+    }
+
+    public Map<String, Object> getComponentSchemas() {
+        return componentSchemas;
+    }
+
+    public int getOperationCount() {
+        return operationCount;
     }
 
     public List<Map<String, Object>> getImportMessages() {

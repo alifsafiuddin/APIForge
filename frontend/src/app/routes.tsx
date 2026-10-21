@@ -1,10 +1,14 @@
-import type { RouteObject } from 'react-router'
+import { Navigate, type RouteObject } from 'react-router'
 
 import { PublicOnly, RequireAuth } from '@/features/auth/guards'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { RegisterPage } from '@/features/auth/RegisterPage'
 import { OverviewPage } from '@/features/overview/OverviewPage'
+import { ProjectLayout } from '@/features/projects/ProjectLayout'
 import { ProjectsPage } from '@/features/projects/ProjectsPage'
+import { OperationDetailView } from '@/features/specs/OperationDetailView'
+import { SpecificationPage } from '@/features/specs/SpecificationPage'
+import { SpecOverview } from '@/features/specs/SpecOverview'
 
 import { AppShell } from './layout/AppShell'
 import { NotFoundPage, RouteErrorPage } from './RouteErrorPage'
@@ -36,6 +40,21 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <OverviewPage /> },
           { path: 'projects', element: <ProjectsPage /> },
+          {
+            path: 'projects/:projectId',
+            element: <ProjectLayout />,
+            children: [
+              { index: true, element: <Navigate to="spec" replace /> },
+              {
+                path: 'spec',
+                element: <SpecificationPage />,
+                children: [
+                  { index: true, element: <SpecOverview /> },
+                  { path: 'operations/:operationId', element: <OperationDetailView /> },
+                ],
+              },
+            ],
+          },
           { path: '*', element: <NotFoundPage /> },
         ],
       },

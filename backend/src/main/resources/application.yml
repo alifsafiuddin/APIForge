@@ -31,6 +31,11 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  servlet:
+    multipart:
+      # Uploaded OpenAPI documents; keep in sync with apiforge.specification.max-size.
+      max-file-size: 5MB
+      max-request-size: 6MB
   data:
     web:
       pageable:
@@ -41,6 +46,10 @@ spring:
 server:
   port: ${APIFORGE_SERVER_PORT:8081}
   shutdown: graceful
+  tomcat:
+    # Let Tomcat read (and discard) oversized uploads up to this size so the client receives a
+    # proper 413 response instead of a reset connection.
+    max-swallow-size: 20MB
   servlet:
     session:
       timeout: ${APIFORGE_SESSION_IDLE_TIMEOUT:30m}
@@ -87,6 +96,11 @@ apiforge:
     login-requests-per-minute: 10
     registration-requests-per-minute: 5
     secure-cookies: ${APIFORGE_COOKIE_SECURE:false}
+  specification:
+    max-size: ${APIFORGE_SPEC_MAX_SIZE:5MB}
+    max-operations: 2000
+    max-nesting-depth: 100
+    max-yaml-aliases: 50
 
 logging:
   pattern:

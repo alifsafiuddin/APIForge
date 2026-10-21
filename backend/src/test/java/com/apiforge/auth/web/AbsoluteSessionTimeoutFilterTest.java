@@ -11,6 +11,7 @@ import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
+import org.springframework.util.unit.DataSize;
 
 import com.apiforge.config.ApiForgeProperties;
 import com.apiforge.support.MutableClock;
@@ -64,6 +65,7 @@ class AbsoluteSessionTimeoutFilterTest {
 
     private static ApiForgeProperties properties(Duration absoluteTimeout) {
         return new ApiForgeProperties(new ApiForgeProperties.Cors(List.of()),
-                new ApiForgeProperties.Auth(true, 4, 5, Duration.ofMinutes(15), absoluteTimeout, 10, 5, false));
+                new ApiForgeProperties.Auth(true, 4, 5, Duration.ofMinutes(15), absoluteTimeout, 10, 5, false),
+                new ApiForgeProperties.Specification(DataSize.ofMegabytes(5), 2000, 100, 50));
     }
 }

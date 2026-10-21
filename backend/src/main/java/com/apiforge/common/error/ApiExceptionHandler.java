@@ -31,6 +31,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.apiforge.common.error.Problems.FieldErrorItem;
+import com.apiforge.common.web.PayloadTooLargeException;
 
 /**
  * Converts exceptions raised in Spring MVC into the documented problem+json format.
@@ -69,6 +70,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        if (hasCause(ex, PayloadTooLargeException.class)) {
+            ProblemDetail problem = Problems.create(HttpStatus.CONTENT_TOO_LARGE, ErrorCode.PAYLOAD_TOO_LARGE,
+                    "The request body is too large.", servletRequest(request));
+            return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE).headers(headers).body(problem);
+        }
         ProblemDetail problem = Problems.create(HttpStatus.BAD_REQUEST, ErrorCode.MALFORMED_REQUEST,
                 "The request body could not be read. Check that it is valid JSON of the expected shape.",
                 servletRequest(request));
@@ -102,6 +108,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         if (!ex.fieldErrors().isEmpty()) {
             Problems.withErrors(problem, ex.fieldErrors());
         }
+        ex.properties().forEach(problem::setProperty);
         return ResponseEntity.status(ex.code().status()).body(problem);
     }
 
@@ -155,6 +162,15 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
             Problems.decorate(problem, ErrorCode.fromStatus(statusCode.value()), servletRequest(request));
         }
         return super.createResponseEntity(body, headers, statusCode, request);
+    }
+
+    private static boolean hasCause(Throwable error, Class<? extends Throwable> type) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (type.isInstance(cause)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static ResponseEntity<ProblemDetail> problem(ErrorCode code, String detail, HttpServletRequest request) {

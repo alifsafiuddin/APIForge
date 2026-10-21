@@ -1,5 +1,6 @@
 import { Archive, ArchiveRestore, FolderPlus, MoreHorizontal, Pencil, Search, Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { toast } from 'sonner'
 
 import { ApiError } from '@/api/client'
@@ -206,7 +207,14 @@ function ProjectRow({
     <li className="flex items-start gap-4 p-4">
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="truncate font-medium">{project.name}</h2>
+          <h2 className="truncate font-medium">
+            <Link
+              to={`/projects/${project.id}`}
+              className="rounded-sm hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              {project.name}
+            </Link>
+          </h2>
           {project.archived ? <Badge variant="secondary">Archived</Badge> : null}
         </div>
         {project.description ? (

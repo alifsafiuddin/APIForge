@@ -40,6 +40,7 @@ flowchart LR
 | `APIFORGE_CORS_ALLOWED_ORIGINS` | `http://localhost:5173` (dev only) | only if the UI is on another origin | Explicit CORS origins for `/api/**` |
 | `APIFORGE_SECRETS_KEY` | dev-only key in `application-dev.yml` | **required** (32 bytes base64); startup fails if missing | AES-GCM key for environment secrets |
 | `APIFORGE_AUTH_REGISTRATION_ENABLED` | `true` | as needed | Open self-registration (`false` → 403 `REGISTRATION_DISABLED`) |
+| `APIFORGE_SPEC_MAX_SIZE` | `5MB` | — | Maximum OpenAPI document size (also update `spring.servlet.multipart.*` if raised) |
 | `APIFORGE_SESSION_IDLE_TIMEOUT` | `30m` | — | Session idle timeout |
 | `APIFORGE_SESSION_ABSOLUTE_TIMEOUT` | `12h` | — | Maximum session lifetime after sign-in |
 | `APIFORGE_OUTBOUND_TRUSTED_TARGETS_ENABLED` | `true` | `false` | Allow configured private targets |

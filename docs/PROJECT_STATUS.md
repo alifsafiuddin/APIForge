@@ -1,118 +1,98 @@
 # Project Status
 
-**Current phase**: Phase 2 — database design and authentication — **complete** (2026-10-21)
-**Next phase**: Phase 3 — OpenAPI specification import and explorer (tentative; the next phase brief decides)
-**Runnable today**: registration and sign-in, private project management, read-only execution history API, complete persistence model. Not yet: specification import, test generation and execution, contract validation, coverage, AI.
+**Current phase**: Phase 3 — OpenAPI specification import and explorer — **complete** (2026-10-21)
+**Next phase**: decided by the next phase brief (planned: environments, outbound request safety, ad hoc execution and contract validation)
+**Runnable today**: registration and sign-in, private projects, OpenAPI 3.0/3.1 import (upload or paste) with immutable versions, the specification explorer, read-only execution history API. Not yet: environments, test generation and execution, contract validation, coverage, AI.
 
-## Phase 2 summary
+## Phase 3 summary
 
 ### Delivered
 
-| Area | What exists | Where |
+| Requirement | Implementation | Where |
 |---|---|---|
-| Schema | Migrations V2–V6: `users`, `audit_events`, `api_projects`, `specification_versions`, `environments`, `environment_variables`, `test_suites`, `test_cases`, `test_runs`, `test_results`. UUIDv7 ids, explicit FKs with deliberate delete rules, indexes, timestamps, check constraints, composite same-project FKs, append-only triggers | `db/migration/`, [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) |
-| Entities | JPA entities and repositories for every table (`ddl-auto=validate` checks them against the schema on every start) | `*/domain`, `*/repository` |
-| Authentication | Registration, JSON login, logout, `/auth/me`; bcrypt (cost 12) via `DelegatingPasswordEncoder`; NIST-style password policy; server-side sessions (30 min idle, 12 h absolute); session-id and CSRF-token rotation on login; SPA CSRF protection; uniform failure responses; account lockout; per-IP rate limits; registration switch | `auth/`, `config/SecurityConfig` |
-| Authorization | API level (authenticated by default, explicit public allow-list); service level (`ProjectAccessService.requireOwned`, parent-scoped child lookups); 404 for foreign resources; database-level same-project FKs; ArchUnit rules | `project/service`, `execution/service`, `ArchitectureTest` |
-| Audit | Security event trail (registration, sign-ins, failures, lockouts, logout, project create/delete, cross-user attempts) with IP and request id; append-only | `audit/` |
-| APIs | Auth endpoints; projects CRUD with search, sort allow-list, pagination (capped at 100), optimistic locking; read-only runs/results history | [API_DESIGN.md](API_DESIGN.md) |
-| Errors | Centralized handling extended: `ApiException` codes, optimistic lock → `STALE_VERSION`, integrity → `CONFLICT` (no constraint names leaked), security exceptions → 401/403 problem+json from filters and controllers | `common/error/` |
-| Frontend | Login and registration pages (client validation mirroring server rules, server field errors), route guard with safe `next` redirect, global 401 handling, user menu with sign-out, Projects page (search, sort, active/archived, paging, create/edit/archive/delete with typed confirmation), recent projects on the Overview, CSRF-aware API client with one automatic retry on token rotation | `frontend/src/features/{auth,projects}` |
+| OpenAPI 3.x JSON and YAML | Format detected from content; 3.0.x and 3.1.x accepted, Swagger 2.0 and other versions rejected with guidance | `spec/internal/DocumentReader`, `SpecificationAnalyzer` |
+| File upload and text input | `POST /specs` as multipart (`file`) or JSON (`{content}`); same for `/specs/validate` (dry run) | `spec/web/SpecificationController` |
+| Size and content limits | 5 MB document limit (multipart limits, `RequestSizeLimitFilter` for every body incl. chunked, service check); strict UTF-8; YAML alias, nesting, code-point limits; no duplicate keys; ≤ 2,000 operations; path length | `config/RequestSizeLimitFilter`, `spec/internal/*` |
+| Maintained parser | swagger-parser 2.1.48 (OpenAPI 3 module), fed a pre-validated JSON string | `spec/internal/OpenApiParserAdapter` |
+| Understandable errors | Every finding is `{severity, code, message, location}`; line/column for syntax errors, document path otherwise; 422 `SPEC_INVALID` lists them all | `ImportMessage`, API_DESIGN §2.3 |
+| Metadata extraction | Info, servers, tags, security schemes, component schemas; per operation: method, path, operationId, summary, description, tags, deprecated, effective parameters, request body, ordered responses with headers, effective security | `spec/internal/OpenApiNormalizer` |
+| Local references and nested objects | Parameter/request-body/response/header references resolved; schema references kept and resolved against stored component schemas (recursion-safe) | `OpenApiNormalizer`, `SchemaView` |
+| Duplicate/ambiguous operations, unsupported features | Duplicate keys (hidden duplicate paths/methods), duplicate operationIds, ambiguous paths, undeclared path parameters → errors; callbacks, webhooks, links, cookie parameters, non-JSON-only bodies, OAuth2/OIDC/mTLS, 3.1 validation scope → warnings/notes | `SpecificationAnalyzer` |
+| Persist original, version, normalized metadata | V7 migration: `api_operations` (immutable) + new `specification_versions` columns; raw document stored byte for byte with SHA-256 | `db/migration/V7__…` |
+| Versions keep their test results | Versions and operations are immutable; runs keep `specification_version_id`; activating another version marks tests for vanished operations STALE (kept) and revives returning ones | `SpecificationService.activate`, ITs |
+| No outbound HTTP during import | Every non-local `$ref` is rejected before parsing; the parser gets content, never a location | `ReferenceGuard`; IT with a live local server receiving 0 requests |
+| Explorer | Project page → Specification: version selector, searchable endpoint index grouped by tag with method badges and filters, version overview (servers, schemes, tags, findings, download original), endpoint detail (parameters, request body, responses, headers, security, warnings) with an expandable schema viewer; import dialog (upload/drag-and-drop or paste, dry-run check) | `frontend/src/features/specs/*` |
 
-**Deliberately not built in Phase 2**: `coverage_snapshots` (optional in the brief; coverage is derived, ADR-013). Environment, test-suite and test-case APIs (their tables and entities exist; the endpoints arrive with the phases that add their safety controls: SSRF policy and secret encryption, review gate). Account settings (password change, display name).
-
-### Verification (all executed on 2026-10-21; Windows 11, Docker Desktop 29.9.1, Node 24.22.0, JDK 21.0.8)
+### Verification (executed 2026-10-21; Windows 11, Docker Desktop 29.9.1, Node 24.22.0, JDK 21.0.8)
 
 | Check | Method | Result |
 |---|---|---|
-| Backend build and tests | `./mvnw verify` (warnings are errors, enforcer, JaCoCo) | ✅ **129 tests, 0 failures, 0 errors, 0 skipped**. Line coverage 90.5% (900/995), branch 76.6% (190/248) |
-| Frontend lint / typecheck / tests | `npm run check` | ✅ 0 lint findings (no suppressions), tsc clean, **51/51 tests** |
-| Frontend coverage | `vitest --coverage` | Lines 89.8%, branches 81.2%, functions 84.7% |
-| Frontend build | `npm run build` | ✅ no warnings; largest chunk 221 kB |
-| Dependency audit | `npm audit` | ✅ 0 vulnerabilities (after removing the shadcn CLI dependency, ADR-023) |
-| Registration | ITs + headless Edge against the real stack | ✅ account created, signed in, only `{bcrypt}$2a$12…` stored (checked in the dev DB), no plaintext anywhere |
-| Login / invalid credentials | ITs + browser | ✅ success starts a rotated session; unknown e-mail and wrong password give identical 401s; lockout after 5 failures |
-| Unauthorized access | ITs | ✅ every protected endpoint and unknown path → 401 problem+json; no CSRF token → 403 with no side effect |
-| Cross-user access | `CrossUserAccessIntegrationTest` + browser (second user probing the first user's project id) | ✅ 404 everywhere, indistinguishable from a missing project, owner data unchanged, attempt audited (`CROSS_USER_ACCESS_DENIED` row in the dev DB) |
-| Validation failures | ITs (backend) + component tests (frontend) | ✅ per-field `errors[]`, unknown properties rejected, sort allow-list, UI shows server field errors next to fields |
-| Persistence | `SchemaIntegrationTest`, `ProjectIntegrationTest`, browser sign-out/sign-in | ✅ round trips incl. jsonb; cascades and SET NULL rules as documented; data survives sign-out and backend restart |
-| Database migrations | Fresh DB (Testcontainers) and incremental upgrade of the Phase 1 dev DB (V1 → V6) | ✅ both; `flyway_schema_history` shows V1–V6 successful |
-| Real app security config | Backend log in `dev` | ✅ no generated default password (custom user store in use) |
-| Clean checkout | `git checkout-index` of the staged tree into an empty directory; `mvnw verify`, `npm ci && npm run check && npm run build` | ✅ see final line of this section |
+| Backend build and tests | `./mvnw verify` | ✅ **189 tests, 0 failures, 0 errors, 0 skipped**; line coverage 92.2% (1657/1798), branch 76.6% |
+| Frontend lint / typecheck / tests | `npm run check` | ✅ 0 lint findings (no suppressions), tsc clean, **74/74 tests**; coverage lines 92.0%, branches 77.6% |
+| Frontend build / audit | `npm run build`, `npm audit` | ✅ no warnings; 0 vulnerabilities |
+| Required test cases | Valid JSON; valid YAML; malformed input; missing required fields; nested references; arrays, enums, nullable, required; unsupported/invalid references; oversized uploads | ✅ all covered (TESTING.md §7: `SpecificationAnalyzerTest`, `SpecificationImportIntegrationTest`, `RequestSizeLimitFilterTest`, `SchemaView.test.tsx`, `SpecificationPage.test.tsx`) |
+| **Completion check**: import a real sample, verify the endpoint inventory, refresh, confirm persistence | Headless Microsoft Edge against the running stack (PostgreSQL in Docker, backend, Vite): registered, created a project, **uploaded `samples/petstore3-openapi.yaml` through the browser** (real multipart), dry-run check, import; compared the inventory with the document; opened `GET /pet/{petId}`; reloaded the page; searched; tried an invalid import; mobile layout | ✅ 15/15 checks: version 1 with **19 endpoints, identical to the document's 19 (method, path) pairs in order**; detail showed the required `petId` path parameter, responses 200/400/404/default and the expanded `Pet` schema with its status enum; **after reload the endpoint detail and all 19 endpoints were still there**; search narrowed to 3 order endpoints; the invalid document showed "Required field 'info' is missing." with its location; no JavaScript errors |
+| Persistence in the database | `psql` on the dev database after the browser run | ✅ `specification_versions`: v1, active, 19 operations, YAML, 23,165 bytes (= the file); 19 `api_operations` rows; `SPECIFICATION_IMPORTED` audit event |
+| Migration on existing data | Backend start against the Phase 2 dev database | ✅ V6 → V7 applied |
+| Clean checkout | `git checkout-index` of the staged tree into an empty directory; `mvnw verify`, `npm ci && npm run check && npm run build` | See final line below |
 
-Clean checkout (final staged tree): ✅ backend 129/129 tests, BUILD SUCCESS; `npm ci` (0 vulnerabilities), `npm run check` 51/51, `npm run build` with 0 warnings.
+Clean checkout (final staged tree): ✅ backend 189/189 tests, BUILD SUCCESS; `npm ci` (0 vulnerabilities), `npm run check` 74/74, `npm run build` with 0 warnings.
 
 ### Defects found and fixed during this phase
 
-- **Self-deadlock in audit writes** (design review, before any run): audit events written in a new transaction would wait on the uncommitted user row during registration. Audits now join the caller's transaction; only rollback-surviving events use their own (ADR-023).
-- **Ownership check ordering**: renaming a project then checking for duplicates triggered an auto-flush into the unique index (generic 409 instead of `DUPLICATE_NAME`). The target state is now validated before mutating.
-- **Test fixture violated `ck_test_runs_timeline`**: the constraint correctly caught a run "started" before it was created; the fixture now persists first.
-- **Module cycle** (`audit` ↔ `auth`) found by the new ArchUnit rule; the logout listener moved to `auth`.
-- **Supply-chain advisory** in the shadcn CLI tree (unpatched `braces`); the CLI is no longer a dependency.
+- **YAML aliases were silently corrupted**: Jackson's YAML parser returns `*alias` as a plain string, so documents using anchors imported wrong data and the alias limit never applied. Found by the alias-bomb test; YAML is now loaded with SnakeYAML under explicit limits (ADR-024).
+- **Undeclared path parameters were accepted** (swagger-parser does not report them); now an error.
+- **Array parameters' `$ref`s were skipped** by the first reference-guard draft (array items were treated as author-chosen names); fixed before the first run.
+- **Module cycle** `common` ↔ `config` introduced by the size filter; caught by the ArchUnit cycle rule, filter moved to `config`.
+- **Silent UI failure**: the import dialog only displayed API errors, so a network failure showed nothing; all failures are now shown (with a test).
+- **Mobile overflow**: a long version title widened the version selector beyond a phone screen; found by the browser check, fixed.
+- **Schema viewer collapsed one-level references** (e.g. an enum behind `$ref`) because expansion counted property depth; now counts reference depth.
 
 ### Known limitations
 
-- Sessions and rate-limit counters are in memory: single backend instance, and a restart signs users out (ADR-008/014).
-- GitHub CI has not run yet (no remote configured).
-- Maven still prints two `HTTP 401` warnings for repositories declared in Flyway's own POM (third-party, harmless).
+- Specifications split across files must be bundled before import (by design: no fetching).
+- OpenAPI 3.1-specific schema keywords are displayed as written; contract validation support for them is decided with the validator (ADR-021).
+- Markdown in descriptions is shown as plain text (safe by design; no rich rendering).
+- Sessions and rate limits are in memory (single instance); GitHub CI has not run yet (no remote).
+- The frontend upload component test asserts the multipart request at the `fetch` boundary because of a Vitest/jsdom FormData limitation; the real upload is verified by backend ITs and the browser check (ADR-024).
 
-## Phase 1 summary (2026-10-21)
+## History
 
-Runnable foundation: Spring Boot 4.1.1 backend, PostgreSQL 18.6 via Compose, Flyway, Actuator health (accurate DOWN/503 when the DB stops), problem+json errors, request correlation, CORS, React shell with live status, CI workflow. 44 backend and 13 frontend tests at the time; verified from a clean checkout. Committed as `fbbd96f`.
-
-## Phase 0 summary (2026-10-20)
-
-Design documents and verified dependency matrix; no code.
+- **Phase 2 (2026-10-21)** — Database schema (V2–V6), session authentication with CSRF, lockout, rate limiting and audit trail; ownership-based authorization with 404 for foreign resources; projects CRUD; read-only execution history; ArchUnit rules. 129 backend and 51 frontend tests; committed as `0da6635` (branch `phase-2-database-auth`).
+- **Phase 1 (2026-10-21)** — Runnable foundation: Spring Boot 4.1.1, PostgreSQL 18.6, Flyway, Actuator health, problem+json errors, request correlation, CORS, React shell, CI workflow. Committed as `fbbd96f`.
+- **Phase 0 (2026-10-20)** — Design documents and verified dependency matrix.
 
 ## Open risks carried forward
 
-1. **openapi-request-validator message mapping** (JSON path, expected/actual): spike when contract validation starts, networknt fallback (ADR-006).
-2. **Regex DoS in schema `pattern`**: mitigation depends on validator hooks (same spike).
-3. **Small-model JSON reliability**: AI phase model evaluation (ADR-019).
+1. **openapi-request-validator message mapping** (JSON path, expected/actual) and **regex DoS in schema `pattern`**: spike when contract validation starts (ADR-006).
+2. **Small-model JSON reliability** for AI features (ADR-019).
 
-## Implementation plan and milestone checklist
+## Milestone checklist
 
-Phase numbers after 2 are tentative and follow the next phase briefs.
-
-### Phase 1 — Foundation ✅
-### Phase 2 — Database design and authentication ✅
-- [x] Entities and Flyway migrations for all core tables, with FKs, indexes, timestamps, delete rules
-- [x] Registration, login, logout, session expiry (idle + absolute), CSRF, lockout, rate limiting
-- [x] Authorization at API and service levels; cross-user isolation; audit trail
-- [x] Bean Validation, DTOs only, pagination, centralized exception handling, transactions
-- [x] Unit, slice, integration, architecture and frontend tests
-- [x] Frontend: login, registration, route protection, user menu, projects management
-
-### Phase 3 — Specification import and explorer
-- [ ] Ref guard (local `$ref` only), parser adapter (Jackson 2 isolated), size/YAML limits
-- [ ] Immutable versions, `api_operations` projection (new migration), activation, stale marking
-- [ ] Validate (dry-run) endpoint with readable errors
-- [ ] UI: project page, spec explorer, endpoint detail, import dialog
-
-### Phase 4 — Environments, outbound safety, ad hoc execution, contract validation
-- [ ] Environment/variable APIs with AES-GCM secrets and redaction
-- [ ] `outbound` module (SSRF guard, guarded DNS, redirects, limits) and `demo-target`
-- [ ] Ad hoc execution writing `test_runs`/`test_results`; validator spike and `ContractValidator`
-
-### Phase 5 — Deterministic test generation and runs
-### Phase 6 — Coverage and dashboard
-### Phase 7 — AI (Ollama via Spring AI)
-### Phase 8 — Hardening and release (Dockerfiles, nginx, full Compose, Playwright E2E in CI)
+- [x] Phase 0 — Design
+- [x] Phase 1 — Foundation
+- [x] Phase 2 — Database design and authentication
+- [x] Phase 3 — OpenAPI import and explorer
+- [ ] Environments (AES-GCM secrets, redaction), outbound safety (`outbound` module, `demo-target`), ad hoc execution, contract validation
+- [ ] Deterministic test generation and runs
+- [ ] Coverage and dashboard
+- [ ] AI (Ollama via Spring AI)
+- [ ] Hardening and release (Dockerfiles, nginx, full Compose, Playwright E2E in CI)
 
 ## Completion definition tracker
 
 | Criterion | Status |
 |---|---|
 | Frontend and backend run together | ✅ (dev mode) |
-| PostgreSQL persists real application data | ✅ users, projects, audit trail (Phase 2) |
-| Valid OpenAPI spec can be imported and explored | ☐ |
+| PostgreSQL persists real application data | ✅ users, projects, specifications, operations, audit trail |
+| Valid OpenAPI spec can be imported and explored | ✅ Phase 3 (verified with the official Petstore 3 document) |
 | Real tests generated and executed against an authorized test API | ☐ |
 | Contract validation produces explainable results | ☐ |
 | Test history and coverage persist | ◐ History schema and read API exist; nothing writes runs yet |
 | AI suggestions and explanations work through a local model | ☐ |
 | AI outages do not break deterministic testing | ☐ |
-| Auth, authorization and outbound safeguards tested | ◐ Auth and authorization ✅; outbound safeguards pending |
+| Auth, authorization and outbound safeguards tested | ◐ Auth, authorization and import-time no-fetch ✅; execution-time outbound safeguards pending |
 | Automated tests and CI pass | ◐ Local runs pass; GitHub CI not yet run |
 | Docker-based local setup works | ◐ PostgreSQL only |
-| README has reproducible setup and usage | ✅ for the Phase 2 scope |
-| No unresolved critical defects or falsely advertised features | ✅ README and UI describe only what exists |
+| README has reproducible setup and usage | ✅ for the Phase 3 scope |
+| No unresolved critical defects or falsely advertised features | ✅ |

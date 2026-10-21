@@ -90,7 +90,7 @@ class SchemaIntegrationTest {
         MigrationInfo[] applied = flyway.info().applied();
 
         assertThat(applied).extracting(info -> info.getVersion().getVersion())
-                .containsExactly("1", "2", "3", "4", "5", "6");
+                .containsExactly("1", "2", "3", "4", "5", "6", "7");
         assertThat(applied).allSatisfy(info -> assertThat(info.getState()).isEqualTo(MigrationState.SUCCESS));
         assertThat(flyway.info().pending()).isEmpty();
     }
@@ -101,7 +101,7 @@ class SchemaIntegrationTest {
                 "select table_name from information_schema.tables where table_schema = 'public'", String.class);
 
         assertThat(tables).contains("users", "audit_events", "api_projects", "specification_versions", "environments",
-                "environment_variables", "test_suites", "test_cases", "test_runs", "test_results");
+                "environment_variables", "test_suites", "test_cases", "test_runs", "test_results", "api_operations");
     }
 
     @Test
@@ -252,8 +252,9 @@ class SchemaIntegrationTest {
     }
 
     private SpecificationVersion specification(UUID projectId, int number) {
-        return new SpecificationVersion(projectId, number, "3.0.3", "Petstore", "1.0.0",
-                SpecificationVersion.SourceFormat.YAML, "openapi: 3.0.3", HASH, 14,
-                List.of(Map.of("url", "https://api.example.test")), Map.of(), List.of(), user.getId(), Instant.now());
+        return new SpecificationVersion(projectId, number, new SpecificationVersion.Contents("3.0.3", "Petstore",
+                "1.0.0", null, SpecificationVersion.SourceFormat.YAML, "petstore.yaml", "openapi: 3.0.3", HASH, 14,
+                List.of(Map.of("url", "https://api.example.test")), Map.of(), List.of(), Map.of(), 0, List.of()),
+                user.getId(), Instant.now());
     }
 }

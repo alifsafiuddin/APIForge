@@ -59,7 +59,10 @@ class ArchitectureTest {
             .should().beFreeOfCycles();
 
     @ArchTest
-    static final ArchRule jackson2StaysOutUntilOpenApiAdaptersNeedIt = noClasses()
-            .should().dependOnClassesThat().resideInAPackage("com.fasterxml.jackson.databind..")
-            .because("the application uses Jackson 3; Jackson 2 is confined to OpenAPI library adapters (ADR-004)");
+    static final ArchRule openApiLibrariesAreConfinedToTheSpecAdapter = noClasses()
+            .that().resideOutsideOfPackage("com.apiforge.spec.internal..")
+            .should().dependOnClassesThat().resideInAnyPackage("com.fasterxml.jackson..", "io.swagger..",
+                    "org.yaml.snakeyaml..")
+            .because("the application uses Jackson 3; Jackson 2, swagger-parser and SnakeYAML stay inside the "
+                    + "OpenAPI adapter package (ADR-004, ADR-005)");
 }
