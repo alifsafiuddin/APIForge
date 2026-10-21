@@ -28,12 +28,17 @@ import com.apiforge.outbound.Cancellation;
 import com.apiforge.outbound.OutboundProperties;
 import com.apiforge.project.domain.Project;
 import com.apiforge.project.service.ProjectAccessService;
+import com.apiforge.spec.domain.SpecificationVersion;
+import com.apiforge.spec.repository.ApiOperationRepository;
+import com.apiforge.spec.repository.SpecificationVersionRepository;
 import com.apiforge.testcase.domain.Expectations;
 import com.apiforge.testcase.domain.TestCase;
 import com.apiforge.testcase.repository.TestCaseRepository;
 import com.apiforge.testcase.service.TestDefinitionValidator;
 import com.apiforge.testcase.service.TestDefinitionValidator.ExpectationsInput;
 import com.apiforge.testcase.service.TestDefinitionValidator.RequestInput;
+import com.apiforge.validation.ContractValidator;
+import com.apiforge.validation.ContractValidator.DocumentedOperation;
 
 /**
  * Starts test runs, sends ad hoc requests and cancels runs. Everything a run needs (tests,
@@ -68,10 +73,14 @@ public class ExecutionService {
     private final RunExecutor executor;
     private final AuditService audit;
     private final OutboundProperties properties;
+    private final SpecificationVersionRepository versions;
+    private final ApiOperationRepository operations;
 
     public ExecutionService(ProjectAccessService access, EnvironmentService environments, TestCaseRepository testCases,
             TestRunRepository runs, RunRecorder recorder, RunExecutor executor, AuditService audit,
-            OutboundProperties properties) {
+            OutboundProperties properties, SpecificationVersionRepository versions, ApiOperationRepository operations) {
+        this.versions = versions;
+        this.operations = operations;
         this.access = access;
         this.environments = environments;
         this.testCases = testCases;
@@ -105,7 +114,8 @@ public class ExecutionService {
             List<RunExecutor.Item> items = selected.stream().map(ExecutionService::item).toList();
             audit.record(AuditEventType.RUN_STARTED, userId, null, projectId,
                     Map.of("runId", run.getId().toString(), "tests", items.size(), "environment", environment.name()));
-            executor.submit(new RunExecutor.Plan(run.getId(), userId, projectId, environment, items));
+            executor.submit(new RunExecutor.Plan(run.getId(), userId, projectId, environment,
+                    contract(project.getActiveSpecificationVersionId()), items));
             return RunView.from(run);
         } catch (RuntimeException ex) {
             executor.release(userId);
@@ -131,7 +141,7 @@ public class ExecutionService {
         List<String> statuses = request.expectedStatuses() == null || request.expectedStatuses().isEmpty()
                 ? List.of("2XX") : request.expectedStatuses();
         TestDefinitionValidator.Validated validated = TestDefinitionValidator.validate(method + " " + path,
-                request.request(), new ExpectationsInput(statuses, "Ad hoc request.", false), List.of());
+                request.request(), new ExpectationsInput(statuses, "Ad hoc request.", true), List.of());
         ExecutionEnvironment environment = environments.forExecution(projectId, request.environmentId());
         TestCase.RiskLevel risk = TestCase.RiskLevel.forMethod(method);
         if (!RunExecutor.allows(environment.executionPolicy(), risk)) {
@@ -152,8 +162,8 @@ public class ExecutionService {
             snapshot.put("expectations", validated.expectations().toMap());
             RunExecutor.Item item = new RunExecutor.Item(null, method + " " + path, method, path, risk, snapshot,
                     validated.request(), validated.expectations());
-            TestResult result = recorder.record(run.getId(), executor.execute(run.getId(), environment, item,
-                    new Cancellation()));
+            TestResult result = recorder.record(run.getId(), executor.execute(run.getId(), environment,
+                    contract(project.getActiveSpecificationVersionId()), item, new Cancellation()));
             if (result.getErrorKind() == TestResult.ErrorKind.BLOCKED_BY_POLICY) {
                 recorder.auditBlocked(userId, projectId, run.getId(), result.getErrorMessage());
             }
@@ -172,6 +182,21 @@ public class ExecutionService {
         }
         audit.record(AuditEventType.RUN_CANCELLED, userId, null, projectId, Map.of("runId", runId.toString()));
         return RunView.from(runs.findByIdAndProjectId(runId, projectId).orElseThrow());
+    }
+
+    /** The contract of a specification version (empty when the project has none). */
+    private ContractContext contract(UUID versionId) {
+        if (versionId == null) {
+            return ContractContext.empty();
+        }
+        SpecificationVersion version = versions.findById(versionId).orElse(null);
+        if (version == null) {
+            return ContractContext.empty();
+        }
+        List<DocumentedOperation> documented = operations.findBySpecificationVersionIdOrderBySortOrderAsc(versionId).stream()
+                .map(operation -> new DocumentedOperation(operation.getMethod(), operation.getPath(), operation.getResponses()))
+                .toList();
+        return new ContractContext(new ContractValidator(version.getComponentSchemas()), ContractValidator.index(documented));
     }
 
     private void reserveSlot(UUID userId) {

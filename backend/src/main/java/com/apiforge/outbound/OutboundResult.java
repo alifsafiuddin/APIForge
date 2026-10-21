@@ -15,9 +15,10 @@ public sealed interface OutboundResult permits OutboundResult.Response, Outbound
     /**
      * @param body       at most the configured response limit; {@code truncated} when the response was larger
      * @param sizeBytes  bytes received (a lower bound when truncated, unless Content-Length said more)
+     * @param timeToHeadersMs from the start (including redirects followed) until the final response's headers arrived
      */
     record Response(int status, List<Header> headers, byte[] body, long sizeBytes, boolean truncated,
-            String contentType, long durationMs, List<String> redirects) implements OutboundResult {
+            String contentType, long timeToHeadersMs, long durationMs, List<String> redirects) implements OutboundResult {
 
         public Response {
             headers = List.copyOf(headers);

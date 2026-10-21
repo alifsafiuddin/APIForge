@@ -125,6 +125,7 @@ class ExecutionIntegrationTest {
         assertThat(result.path("response").path("body").asString()).isEqualTo("[{\"id\":1,\"name\":\"drill\"}]");
         assertThat(result.path("response").path("contentType").asString()).isEqualTo("application/json");
         assertThat(result.path("durationMs").asInt()).isNotNegative();
+        assertThat(result.path("timeToHeadersMs").asInt()).isBetween(0, result.path("durationMs").asInt());
         assertThat(checks(result, "PASS")).containsExactly("STATUS", "JSON_SYNTAX");
         String correlationId = result.path("correlationId").asString();
         assertThat(correlationId).isEqualTo(TargetApi.lastCorrelationId("/items"));
@@ -307,9 +308,12 @@ class ExecutionIntegrationTest {
         assertThat(run.path("counts").path("total").asInt()).isEqualTo(generated);
         assertThat(run.path("counts").path("error").asInt()).isZero();
         assertThat(run.path("counts").path("skipped").asInt()).isZero();
-        assertThat(run.path("counts").path("failed").asInt()).as("the documented maxLength deviation").isEqualTo(1);
-        assertThat(run.path("counts").path("passed").asInt()).isEqualTo(generated - 1);
         List<JsonNode> results = results(run.path("id").asString());
+        assertThat(run.path("counts").path("failed").asInt()).as("the documented maxLength deviation; failed: %s",
+                results.stream().filter(result -> result.path("outcome").asString().equals("FAILED"))
+                        .map(result -> result.path("testName").asString() + " -> " + result.path("firstFailure").asString())
+                        .toList()).isEqualTo(1);
+        assertThat(run.path("counts").path("passed").asInt()).isEqualTo(generated - 1);
         assertThat(results).filteredOn(result -> result.path("outcome").asString().equals("FAILED"))
                 .singleElement().satisfies(failed -> {
                     assertThat(failed.path("testName").asString()).isEqualTo("Field 'name' longer than maxLength 20");
@@ -333,6 +337,111 @@ class ExecutionIntegrationTest {
             assertThat(result.path("errorMessage").asString()).contains("policy READ_ONLY");
         });
         assertThat(run.path("counts").path("skipped").asInt()).isEqualTo(skipped.size());
+    }
+
+    // ---- contract validation and reporting -----------------------------------------------------
+
+    private JsonNode variant(String environment, String variant) {
+        Response response = adHoc(environment, "GET", "/items", request(Map.of(), Map.of("variant", variant),
+                Map.of("mode", "NONE")));
+        assertThat(response.status()).as(response.body()).isEqualTo(200);
+        return response.json();
+    }
+
+    private static List<String> summary(JsonNode result) {
+        List<String> checks = new ArrayList<>();
+        result.path("checks").forEach(check -> checks.add(check.path("name").asString() + "=" + check.path("result").asString()));
+        return checks;
+    }
+
+    @Test
+    void responsesAreValidatedAgainstTheActiveContract() {
+        importAndGenerate();
+        String environment = readOnlyEnvironment();
+
+        JsonNode valid = get(environment, "/items");
+        JsonNode legacy = variant(environment, "legacy");
+        JsonNode xml = variant(environment, "xml");
+        JsonNode teapot = variant(environment, "teapot");
+        JsonNode unknown = get(environment, "/status/500");
+
+        assertThat(valid.path("outcome").asString()).isEqualTo("PASSED");
+        assertThat(summary(valid)).containsExactly("STATUS=PASS", "STATUS_DOCUMENTED=PASS", "CONTENT_TYPE=PASS",
+                "JSON_SYNTAX=PASS", "BODY_SCHEMA=PASS");
+
+        assertThat(legacy.path("outcome").asString()).isEqualTo("FAILED");
+        List<String> violations = new ArrayList<>();
+        legacy.path("checks").forEach(check -> {
+            if (check.path("result").asString().equals("FAIL")) {
+                violations.add(String.join(" | ", check.path("name").asString(), check.path("path").asString(),
+                        check.path("keyword").asString(), check.path("expected").asString(), check.path("actual").asString()));
+            }
+        });
+        assertThat(violations).containsExactlyInAnyOrder(
+                "BODY_SCHEMA | $[0].id | type | integer | string \"1\"",
+                "BODY_SCHEMA | $[0].name | minLength | at least 1 character | 0 characters");
+
+        assertThat(xml.path("outcome").asString()).isEqualTo("FAILED");
+        assertThat(summary(xml)).containsExactly("STATUS=PASS", "STATUS_DOCUMENTED=PASS", "CONTENT_TYPE=FAIL", "BODY_SCHEMA=SKIPPED");
+
+        assertThat(teapot.path("outcome").asString()).isEqualTo("FAILED");
+        assertThat(summary(teapot)).containsExactly("STATUS=FAIL", "STATUS_DOCUMENTED=FAIL", "JSON_SYNTAX=PASS",
+                "BODY_SCHEMA=SKIPPED");
+        assertThat(teapot.path("checks").get(1).path("expected").asString()).isEqualTo("one of 200, 401");
+
+        // Not in the specification: the status expectation still decides, the contract is reported as skipped.
+        assertThat(summary(unknown)).containsExactly("STATUS=FAIL", "STATUS_DOCUMENTED=SKIPPED", "JSON_SYNTAX=PASS");
+    }
+
+    @Test
+    void skippedValidationsNeverCountAsPassedChecks() {
+        importAndGenerate();
+
+        JsonNode result = adHoc(readOnlyEnvironment(), "GET", "/items/abc",
+                request(Map.of(), Map.of(), Map.of("mode", "NONE"))).json();
+
+        // 400 is documented without a body: the body is reported as not validated rather than as valid.
+        assertThat(result.path("response").path("status").asInt()).isEqualTo(400);
+        assertThat(summary(result)).containsExactly("STATUS=FAIL", "STATUS_DOCUMENTED=PASS", "CONTENT_TYPE=SKIPPED",
+                "JSON_SYNTAX=PASS", "BODY_SCHEMA=SKIPPED");
+        assertThat(result.path("checks").get(4).path("message").asString()).contains("was not validated");
+    }
+
+    @Test
+    void resultsCanBeFilteredByOutcomeAndRunsCompared() {
+        importAndGenerate();
+        String before = awaitRun(browser.post(base + "/runs", Map.of("environmentId", readOnlyEnvironment())).json()
+                .path("id").asString()).path("id").asString();
+        assertThat(browser.get(base + "/runs/" + before + "/comparison").status()).as("no earlier run").isEqualTo(404);
+        String after = awaitRun(browser.post(base + "/runs", Map.of("environmentId",
+                environment("ALLOW_DESTRUCTIVE", false, 2000))).json().path("id").asString()).path("id").asString();
+
+        JsonNode failed = browser.get(base + "/runs/" + after + "/results?outcome=FAILED").json();
+        assertThat(failed.path("page").path("totalElements").asInt()).as(failed.toString()).isEqualTo(1);
+        JsonNode deviation = failed.path("content").get(0);
+        // The unexpected 201 also returns the over-long name, which breaks maxLength 20 of the documented Item.
+        assertThat(deviation.path("failedChecks").asInt()).as(deviation.toString()).isEqualTo(2);
+        assertThat(deviation.path("skippedChecks").asInt()).isZero();
+        JsonNode deviationChecks = browser.get(base + "/runs/" + after + "/results/" + deviation.path("id").asString())
+                .json().path("checks");
+        assertThat(deviationChecks.get(4).path("path").asString()).isEqualTo("$.name");
+        assertThat(deviationChecks.get(4).path("keyword").asString()).isEqualTo("maxLength");
+        assertThat(deviation.path("firstFailure").asString()).contains("201");
+
+        Response compared = browser.get(base + "/runs/" + after + "/comparison");
+        assertThat(compared.status()).as(compared.body()).isEqualTo(200);
+        JsonNode comparison = compared.json();
+        int skippedBefore = (int) results(before).stream()
+                .filter(result -> result.path("outcome").asString().equals("SKIPPED")).count();
+        assertThat(comparison.path("baseline").path("id").asString()).isEqualTo(before);
+        assertThat(comparison.path("counts").path("FIXED").asInt()).isEqualTo(skippedBefore - 1);
+        assertThat(comparison.path("counts").path("CHANGED").asInt()).isEqualTo(1);
+        assertThat(comparison.path("counts").path("REGRESSED").asInt()).isZero();
+        assertThat(comparison.path("counts").path("NEW").asInt()).isZero();
+        assertThat(comparison.path("changes").get(0).path("kind").asString()).isEqualTo("FIXED");
+        JsonNode explicit = browser.get(base + "/runs/" + before + "/comparison?baseline=" + after).json();
+        assertThat(explicit.path("counts").path("REGRESSED").asInt()).isEqualTo(skippedBefore - 1);
+        assertThat(TestUsers.register(port).client().get(base + "/runs/" + after + "/comparison").status()).isEqualTo(404);
     }
 
     /** A test whose request hits the slow item lookup (3 s). */

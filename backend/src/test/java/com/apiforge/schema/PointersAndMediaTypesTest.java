@@ -1,6 +1,6 @@
-package com.apiforge.generation.engine;
+package com.apiforge.schema;
 
-import static com.apiforge.generation.engine.Schemas.value;
+import static com.apiforge.schema.Schemas.value;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 

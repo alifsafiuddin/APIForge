@@ -17,6 +17,12 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Function;
 
+import com.apiforge.schema.GuardedPattern;
+import com.apiforge.schema.MediaTypes;
+import com.apiforge.schema.Pointers;
+import com.apiforge.schema.Schema;
+import com.apiforge.schema.SchemaResolver;
+import com.apiforge.schema.SchemaValidator;
 import com.apiforge.common.json.JsonValues;
 import com.apiforge.testcase.domain.Expectations;
 import com.apiforge.testcase.domain.RequestTemplate;
@@ -41,7 +47,7 @@ import tools.jackson.databind.json.JsonMapper;
 public final class DeterministicTestGenerator {
 
     /** Stored with every generated test; bump when the generated content changes. */
-    public static final String VERSION = "1";
+    public static final String VERSION = "2";
     public static final int MAX_TESTS_PER_OPERATION = 100;
     /** Longest string a test may send (SECURITY.md §6.5: no oversized payloads). */
     static final int MAX_STRING_LENGTH = 10_000;

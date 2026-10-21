@@ -7,6 +7,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import com.apiforge.schema.MediaTypes;
+import com.apiforge.schema.Pointers;
+import com.apiforge.schema.SchemaResolver;
 import com.apiforge.testcase.domain.Expectations;
 import com.apiforge.testcase.domain.Expectations.ResponseCheck;
 
@@ -97,7 +100,9 @@ final class ResponseCatalog {
             List<String> described = checks.stream().map(ResponseCatalog::describe).distinct().toList();
             full += " The response body must match " + String.join("; ", described) + ".";
         }
-        return new Expectations(statuses, full, !checks.isEmpty(), checks);
+        // Whatever status comes back is validated against its own documented schema, so a negative
+        // test that gets an unexpected success still reports the body's contract violations.
+        return new Expectations(statuses, full, true, checks);
     }
 
     /** The documented response for {@code status}: exact code, then its class, then "default". */

@@ -200,6 +200,7 @@ public class OutboundHttpClient implements AutoCloseable {
         cancellation.onCancel(httpRequest::cancel);
         resolver.bind(destination);
         try (ClassicHttpResponse response = client.executeOpen(null, httpRequest, context)) {
+            long timeToHeaders = elapsed(started);
             resolver.clear();
             policy.requireAllowedPeer(destination, peer(context));
             Body received = read(response.getEntity(), httpRequest);
@@ -211,7 +212,7 @@ public class OutboundHttpClient implements AutoCloseable {
             log.info("outbound {} {}:{}{} -> {} in {} ms{}", method, url.host(), url.port(), path(url), response.getCode(),
                     duration, received.truncated() ? " (body truncated)" : "");
             return new Response(response.getCode(), responseHeaders, received.bytes(), received.size(),
-                    received.truncated(), firstHeader(responseHeaders, "content-type"), duration, redirects);
+                    received.truncated(), firstHeader(responseHeaders, "content-type"), timeToHeaders, duration, redirects);
         } catch (OutboundBlockedException ex) {
             log.warn("Outbound connection rejected after connect: {}", ex.reason());
             return new Failure(Kind.BLOCKED_BY_POLICY, ex.getMessage(), elapsed(started), redirects);

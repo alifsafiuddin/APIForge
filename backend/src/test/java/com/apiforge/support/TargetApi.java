@@ -75,6 +75,7 @@ public final class TargetApi {
                 delete:
                   responses:
                     '204': {description: Deleted}
+                    '400': {description: Invalid id}
                     '401': {description: Missing or wrong key}
             components:
               securitySchemes:
@@ -176,7 +177,15 @@ public final class TargetApi {
         }
         if (path.equals("/items")) {
             if (method.equals("GET")) {
-                send(exchange, 200, "application/json", "[{\"id\":1,\"name\":\"drill\"}]");
+                // Undocumented ?variant= values break the contract on purpose (generated tests never send them).
+                String query = String.valueOf(exchange.getRequestURI().getRawQuery());
+                switch (query) {
+                    case "variant=legacy" -> send(exchange, 200, "application/json",
+                            "[{\"id\":\"1\",\"name\":\"\"},{\"id\":2,\"name\":\"saw\"}]");
+                    case "variant=xml" -> send(exchange, 200, "text/xml", "<items/>");
+                    case "variant=teapot" -> send(exchange, 418, "application/json", "{\"code\":\"TEAPOT\"}");
+                    default -> send(exchange, 200, "application/json", "[{\"id\":1,\"name\":\"drill\"}]");
+                }
             } else if (method.equals("POST")) {
                 String contentType = String.valueOf(exchange.getRequestHeaders().getFirst("Content-Type"));
                 if (!contentType.startsWith("application/json")) {

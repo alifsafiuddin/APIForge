@@ -1,5 +1,6 @@
 package com.apiforge.execution.repository;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -18,4 +19,8 @@ public interface TestRunRepository extends JpaRepository<TestRun, UUID> {
     Optional<TestRun> findByIdAndProjectId(UUID id, UUID projectId);
 
     List<TestRun> findByStatusIn(Collection<TestRun.Status> statuses);
+
+    /** The run of the same kind created just before {@code createdAt} (the default comparison baseline). */
+    Optional<TestRun> findFirstByProjectIdAndKindAndCreatedAtLessThanOrderByCreatedAtDesc(UUID projectId,
+            TestRun.Kind kind, Instant createdAt);
 }

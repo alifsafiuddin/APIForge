@@ -9,6 +9,16 @@
 // One deviation from the contract is deliberate, so a run shows a real failure:
 //   order line quantities above 999 are accepted (the contract says maximum 999).
 //
+// With WAREHOUSE_LAB_VIOLATIONS=1 the responses also break the contract in these documented,
+// deterministic ways (for trying response contract validation):
+//   GET /health                   status "DEGRADED" (not in the enum)
+//   GET /products                 the first item is a legacy record: price is a string,
+//                                 createdAt is not a date-time, dimensions.widthCm is -1
+//   GET /products/{productId}     the required sku is missing
+//   PATCH /products/{productId}   a patch of exactly one property answers Content-Type text/plain
+//   DELETE /products/42           answers 200 with a body (only 204 is documented)
+//   POST /orders                  an order without couponCode gets status "lost" (not in the enum)
+//
 // Diagnostic endpoints (not in the contract) misbehave on purpose:
 //   GET /lab/echo                 echoes the received headers and query string
 //   GET /lab/slow?ms=3000         answers after a delay (timeouts)
@@ -25,6 +35,11 @@ import { randomUUID } from 'node:crypto'
 const HOST = '127.0.0.1'
 const PORT = Number(process.env.WAREHOUSE_LAB_PORT ?? 8090)
 const API_KEY = process.env.WAREHOUSE_LAB_API_KEY ?? 'lab-demo-key'
+const VIOLATIONS = process.env.WAREHOUSE_LAB_VIOLATIONS === '1'
+const LEGACY_PRODUCT = {
+  id: 7, name: 'Legacy saw', sku: 'LEG-0007', price: '19.90', category: 'tools', createdAt: 'last spring',
+  dimensions: { widthCm: -1, heightCm: 12 },
+}
 
 // ---- schemas (mirroring samples/warehouse-lab-openapi.yaml) -----------------------------------
 
@@ -212,7 +227,7 @@ async function route(request, response) {
   const path = url.pathname
   const method = request.method
 
-  if (path === '/health' && method === 'GET') return send(response, 200, { status: 'UP' })
+  if (path === '/health' && method === 'GET') return send(response, 200, { status: VIOLATIONS ? 'DEGRADED' : 'UP' })
 
   if (path.startsWith('/lab/')) return lab(request, response, url)
 
@@ -231,7 +246,7 @@ async function route(request, response) {
     if (category !== null && !CATEGORY.enum.includes(category)) return error(response, 400, 'BAD_REQUEST', 'unknown category')
     const q = url.searchParams.get('q')
     if (q !== null && ([...q].length < 2 || [...q].length > 50)) return error(response, 400, 'BAD_REQUEST', 'q must have 2-50 characters')
-    const items = [...products.values()].slice(0, Number(limit ?? 20))
+    const items = [...(VIOLATIONS ? [LEGACY_PRODUCT] : []), ...products.values()].slice(0, Number(limit ?? 20))
     return send(response, 200, { items, total: products.size })
   }
 
@@ -259,15 +274,21 @@ async function route(request, response) {
       const current = products.get(id) ?? { id, name: 'Unnamed', sku: 'NEW-0001', price: 1, category: 'tools', createdAt: new Date().toISOString() }
       const updated = { ...current, ...body.value }
       products.set(id, updated)
+      if (VIOLATIONS && Object.keys(body.value).length === 1) return send(response, 200, JSON.stringify(updated))
       return send(response, 200, updated)
     }
     if (!(id >= 1)) return error(response, 404, 'NOT_FOUND', 'No such product')
     if (method === 'GET') {
       const product = products.get(id) ?? { id, name: 'Sample product', sku: 'SMP-0001', price: 9.99, category: 'garden', createdAt: new Date().toISOString() }
+      if (VIOLATIONS) {
+        const { sku, ...withoutSku } = product
+        return send(response, 200, withoutSku)
+      }
       return send(response, 200, product)
     }
     if (method === 'DELETE') {
       products.delete(id)
+      if (VIOLATIONS && id === 42) return send(response, 200, { deleted: id })
       return send(response, 204)
     }
   }
@@ -277,7 +298,8 @@ async function route(request, response) {
     if (!body) return undefined
     const problem = validate(body.value, NEW_ORDER)
     if (problem) return error(response, 400, 'VALIDATION_FAILED', problem)
-    return send(response, 201, { ...body.value, id: randomUUID(), status: 'accepted' })
+    const status = VIOLATIONS && body.value.couponCode === undefined ? 'lost' : 'accepted'
+    return send(response, 201, { ...body.value, id: randomUUID(), status })
   }
 
   return error(response, 404, 'NOT_FOUND', 'No such route')
@@ -315,5 +337,6 @@ createServer((request, response) => {
     if (!response.headersSent) error(response, 500, 'INTERNAL', 'Unexpected error')
   })
 }).listen(PORT, HOST, () => {
-  console.log(`Warehouse Lab API listening on http://${HOST}:${PORT} (X-API-Key: set WAREHOUSE_LAB_API_KEY to change)`)
+  console.log(`Warehouse Lab API listening on http://${HOST}:${PORT} (X-API-Key: set WAREHOUSE_LAB_API_KEY to change)`
+    + (VIOLATIONS ? ' with deliberate contract violations' : ''))
 })

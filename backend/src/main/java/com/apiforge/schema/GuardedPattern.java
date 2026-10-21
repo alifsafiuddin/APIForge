@@ -1,4 +1,4 @@
-package com.apiforge.generation.engine;
+package com.apiforge.schema;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -12,16 +12,16 @@ import java.util.regex.PatternSyntaxException;
  * (result unknown) instead of blocking the request thread. JSON Schema patterns are not
  * anchored, hence {@link java.util.regex.Matcher#find()}.
  */
-final class GuardedPattern {
+public final class GuardedPattern {
 
     /** Character reads allowed per match; generous for real patterns on short generated strings. */
-    static final int READ_BUDGET = 200_000;
+    public static final int READ_BUDGET = 200_000;
     private static final int MAX_CACHED = 256;
 
     private final Map<String, Optional<Pattern>> compiled = new HashMap<>();
 
     /** @return whether {@code input} matches, or empty when the pattern is invalid or too expensive */
-    Optional<Boolean> matches(String regex, String input) {
+    public Optional<Boolean> matches(String regex, String input) {
         Optional<Pattern> pattern = compile(regex);
         if (pattern.isEmpty()) {
             return Optional.empty();
@@ -33,7 +33,7 @@ final class GuardedPattern {
         }
     }
 
-    Optional<Pattern> compile(String regex) {
+    public Optional<Pattern> compile(String regex) {
         Optional<Pattern> cached = compiled.get(regex);
         if (cached != null) {
             return cached;
@@ -54,7 +54,7 @@ final class GuardedPattern {
 
         private static final long serialVersionUID = 1L;
 
-        BudgetExceededException() {
+        public BudgetExceededException() {
             super(null, null, false, false);
         }
     }

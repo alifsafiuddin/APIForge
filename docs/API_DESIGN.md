@@ -123,8 +123,9 @@ Base: `/projects/{projectId}/specs`. Every call requires owning the project (oth
 |---|---|---|
 | GET | `/projects/{projectId}/runs` | Paged runs, newest first (`?sort=createdAt\|startedAt\|finishedAt\|status`). Each run: status, environment name/base URL snapshots, outcome counts, timestamps |
 | GET | `/projects/{projectId}/runs/{runId}` | One run |
-| GET | `/projects/{projectId}/runs/{runId}/results` | Paged result summaries (`?sort=executedAt\|outcome\|durationMs`, default `executedAt,asc`) |
-| GET | `/projects/{projectId}/runs/{runId}/results/{resultId}` | Full result: request snapshot, response, checks, error kind and message |
+| GET | `/projects/{projectId}/runs/{runId}/results` | Paged result summaries (`?outcome=PASSED\|FAILED\|ERROR\|SKIPPED\|INCONCLUSIVE`, `?sort=executedAt\|outcome\|durationMs`, default `executedAt,asc`). Each summary includes `failedChecks`, `skippedChecks` and `firstFailure` (Phase 6) |
+| GET | `/projects/{projectId}/runs/{runId}/results/{resultId}` | Full result: request snapshot, response, checks (assertions, §2.6), error kind and message, `durationMs` and `timeToHeadersMs` |
+| GET | `/projects/{projectId}/runs/{runId}/comparison?baseline=` | Outcome changes against `baseline`, or by default against the previous run of the same kind (404 when there is none): `{baseline, current, counts: {FIXED, REGRESSED, CHANGED, UNCHANGED, NEW, REMOVED}, changes: [{testName, operationKey, testCaseId, baselineOutcome, currentOutcome, kind, baselineResultId, currentResultId}]}` (Phase 6) |
 
 Runs and results are always resolved through the project and run in the path, so an id from another project returns 404. Runs are created by the execution engine (§2.5).
 
@@ -137,31 +138,37 @@ Runs and results are always resolved through the project and run in the path, so
 | POST | `/projects/{projectId}/executions` | `{environmentId, method, path, request: {query, headers, body, auth}, expectedStatuses?}` (path concrete, no query/fragment; `expectedStatuses` default `["2XX"]`). Synchronous; stored as a one-result `AD_HOC` run; returns the result detail. Method above the environment policy → 403 `EXECUTION_POLICY`; request budget (300/min per user) exhausted → 429 |
 | GET | `/projects/{projectId}/runs`, `/runs/{runId}`, `/runs/{runId}/results[/{resultId}]` | History (§2.5a). Runs include `kind` (`TEST_RUN`, `AD_HOC`) and `statusReason`; results include `correlationId`, the redacted request snapshot (method, URL, headers, body, auth mode, redirects followed), the redacted response (status, headers, text body up to 256 KB, size, truncation, content type), checks and the error kind |
 
-**Outcomes.** A response is evaluated with these checks: `STATUS` (against the expected codes or classes), `CONTENT_TYPE` (a documented JSON body must come back as JSON), `JSON_SYNTAX` (JSON bodies must parse; not evaluated when truncated) and `RESPONSE_SCHEMA`, which is reported `NOT_EVALUATED` until contract validation exists. Any `FAIL` → `FAILED`, otherwise `PASSED`. A request that got no usable response is `ERROR` with `TIMEOUT`, `CONNECT_FAILED`, `DNS_FAILURE`, `TLS_ERROR`, `BLOCKED_BY_POLICY`, `REDIRECT_BLOCKED`, `INVALID_RESPONSE`, `VARIABLE_UNRESOLVED`, `CANCELLED` or `INTERNAL`.
+**Outcomes.** A response is evaluated with `STATUS` (against the test's expected codes or classes) plus the contract assertions of §2.6. Any `FAIL` → `FAILED`; otherwise any `INCONCLUSIVE` → `INCONCLUSIVE`; otherwise `PASSED`. `SKIPPED` assertions never count as passes. (Results recorded in Phase 5 may still contain `CONTENT_TYPE`/`RESPONSE_SCHEMA` checks with result `NOT_EVALUATED`.) A request that got no usable response is `ERROR` with `TIMEOUT`, `CONNECT_FAILED`, `DNS_FAILURE`, `TLS_ERROR`, `BLOCKED_BY_POLICY`, `REDIRECT_BLOCKED`, `INVALID_RESPONSE`, `VARIABLE_UNRESOLVED`, `CANCELLED` or `INTERNAL`.
 
 **Correlation.** Every request carries `X-APIForge-Request-Id` (a dedicated name, so it never collides with headers the API under test documents); the same id is stored with the result and appears in APIForge's outbound log line.
 
-### 2.6 Contract validation — Phase 4
+### 2.6 Contract validation ✅ Phase 6
 
-Findings are returned inside execution detail. Additional report endpoint:
+Every response is validated against the operation of the **active** specification that matches the request (method and path template). The results are the `checks` of the result detail, in this order:
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/projects/{projectId}/runs/{runId}/validation-report` | Findings aggregated by operation, rule and severity, with counts and examples |
+| Check | Result |
+|---|---|
+| `STATUS` | `PASS`/`FAIL`: the status is one of the test's expected statuses |
+| `STATUS_DOCUMENTED` | `PASS` (exact code, class such as `4XX`, or `default`); `FAIL` with the documented statuses as `expected`; `SKIPPED` when no operation matches |
+| `CONTENT_TYPE` | `PASS`; `FAIL` when a body has no or an undocumented media type; `SKIPPED` when the response is documented without a body |
+| `JSON_SYNTAX` | Any body declaring JSON: `PASS`, `FAIL` (line and column, never body text), `INCONCLUSIVE` when truncated |
+| `BODY_SCHEMA` | `PASS`; one `FAIL` per violation; `INCONCLUSIVE` (truncated, non-JSON with a schema, unsupported keywords); `SKIPPED` with the reason (no documented body or schema, undocumented status, content-type mismatch, invalid JSON, validation turned off) |
 
-Finding shape:
+Assertion shape (fields other than `name`, `result` and `message` appear when they apply):
 
 ```json
 {
-  "rule": "SCHEMA_TYPE_MISMATCH",
-  "severity": "ERROR",
-  "jsonPath": "$.items[2].price",
+  "name": "BODY_SCHEMA",
+  "result": "FAIL",
+  "path": "$.items[0].price",
+  "keyword": "type",
   "expected": "number",
-  "actual": "string (\"12.50\")",
-  "message": "Value at $.items[2].price is a string but the schema requires number.",
-  "specPointer": "#/paths/~1orders/get/responses/200/content/application~1json/schema/properties/items/items/properties/price"
+  "actual": "string \"19.90\"",
+  "message": "$.items[0].price expected number but found string."
 }
 ```
+
+Values in `expected`, `actual` and `message` are redacted like the rest of the result. An aggregated per-rule report endpoint was planned here but is not implemented; findings are reported per result.
 
 ### 2.7 Test cases, suites and generation ✅ Phase 4
 

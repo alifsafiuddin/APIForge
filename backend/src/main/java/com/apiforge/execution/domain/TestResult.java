@@ -37,8 +37,9 @@ public class TestResult {
     }
 
     /** Response data of an execution that received an HTTP response. */
+    /** @param timeToHeadersMs until the response headers arrived, or {@code null} when unknown */
     public record ResponseData(int status, Map<String, Object> headers, String body, long sizeBytes,
-            boolean truncated, String contentType) {
+            boolean truncated, String contentType, Integer timeToHeadersMs) {
     }
 
     @Id
@@ -83,6 +84,9 @@ public class TestResult {
 
     @Column(name = "duration_ms")
     private Integer durationMs;
+
+    @Column(name = "time_to_headers_ms")
+    private Integer timeToHeadersMs;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "outcome", nullable = false, length = 20)
@@ -137,6 +141,7 @@ public class TestResult {
         result.responseSizeBytes = response.sizeBytes();
         result.responseTruncated = response.truncated();
         result.responseContentType = response.contentType();
+        result.timeToHeadersMs = response.timeToHeadersMs();
         return result;
     }
 
@@ -220,6 +225,10 @@ public class TestResult {
 
     public Integer getDurationMs() {
         return durationMs;
+    }
+
+    public Integer getTimeToHeadersMs() {
+        return timeToHeadersMs;
     }
 
     public Outcome getOutcome() {

@@ -1,4 +1,4 @@
-package com.apiforge.generation.engine;
+package com.apiforge.schema;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -17,20 +17,20 @@ import com.apiforge.common.json.JsonValues;
  * import) and prepares a flattened view of {@code allOf} for value synthesis. Validation always
  * uses the original node, so flattening never weakens a check.
  */
-final class SchemaResolver {
+public final class SchemaResolver {
 
-    static final String COMPONENT_PREFIX = "#/components/schemas/";
+    public static final String COMPONENT_PREFIX = "#/components/schemas/";
     private static final int MAX_HOPS = 20;
     private static final int MAX_ALL_OF_DEPTH = 10;
 
     private final Map<?, ?> components;
 
-    SchemaResolver(Map<?, ?> components) {
+    public SchemaResolver(Map<?, ?> components) {
         this.components = components == null ? Map.of() : components;
     }
 
     /** @param location where {@code node} sits in the specification, used in explanations */
-    Schema resolve(Object node, String location) {
+    public Schema resolve(Object node, String location) {
         return resolve(node, location, 0);
     }
 
@@ -104,7 +104,7 @@ final class SchemaResolver {
      * A oneOf/anyOf alternative as a standalone schema: the parent's own keywords (without the
      * composition) merged with the alternative.
      */
-    Schema alternative(Schema parent, Object alternativeNode, String location) {
+    public Schema alternative(Schema parent, Object alternativeNode, String location) {
         Schema alternative = resolve(alternativeNode, location);
         if (alternative.problem() != null || alternative.isNever()) {
             return alternative;
@@ -172,7 +172,7 @@ final class SchemaResolver {
         });
     }
 
-    static List<String> typeList(Object type) {
+    public static List<String> typeList(Object type) {
         List<String> types = new ArrayList<>();
         if (type instanceof String single) {
             types.add(single);

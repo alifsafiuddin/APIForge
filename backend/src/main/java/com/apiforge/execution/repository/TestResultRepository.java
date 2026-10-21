@@ -1,5 +1,6 @@
 package com.apiforge.execution.repository;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -11,4 +12,8 @@ import com.apiforge.execution.domain.TestResult;
 public interface TestResultRepository extends JpaRepository<TestResult, UUID> {
 
     Page<TestResult> findByTestRunId(UUID testRunId, Pageable pageable);
+
+    Page<TestResult> findByTestRunIdAndOutcome(UUID testRunId, TestResult.Outcome outcome, Pageable pageable);
+
+    List<TestResult> findByTestRunIdOrderByExecutedAtAsc(UUID testRunId);
 }

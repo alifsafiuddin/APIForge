@@ -29,6 +29,14 @@ executed for real: `node samples/warehouse-lab-server.mjs` (Node 22+, no depende
 that protects nothing; override it with `WAREHOUSE_LAB_API_KEY`).
 - **One deliberate contract deviation:** order line quantities above 999 are accepted, so the generated test
   "Field 'lines[0].quantity' above maximum 999" fails.
+- **Deliberate contract violations on request** (for trying response validation): start it with
+  `WAREHOUSE_LAB_VIOLATIONS=1` (PowerShell: `$env:WAREHOUSE_LAB_VIOLATIONS=1; node samples/warehouse-lab-server.mjs`).
+  Then `/health` reports status `DEGRADED` (not in the enum); `GET /products` lists a legacy item first whose `price` is a
+  string, `createdAt` is not a date-time and `dimensions.widthCm` is -1; `GET /products/{productId}` omits the required
+  `sku`; a PATCH of exactly one property answers `Content-Type: text/plain`; `DELETE /products/42` answers 200 with a
+  body (only 204 is documented); an order without `couponCode` gets status `lost`. A run of the generated tests then
+  fails 13 tests with exactly 27 failed assertions (these violations plus the quantity deviation), which is how
+  Phase 6 was verified.
 - **Diagnostic endpoints:** `/lab/echo` (echoes headers, for redaction checks), `/lab/slow?ms=` (timeouts),
   `/lab/malformed` (invalid JSON), `/lab/status/{code}`, `/lab/redirect?to=`, `/lab/redirect-metadata`
   (a redirect to the cloud metadata address, which APIForge refuses) and `/lab/large?kb=` (size limits).

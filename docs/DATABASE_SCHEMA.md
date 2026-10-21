@@ -224,8 +224,9 @@ erDiagram
 | `V7__api_operations_and_spec_metadata.sql` | `api_operations` (+ immutability trigger); `specification_versions` gains `source_name`, `description`, `tags`, `component_schemas`, `operation_count`; audit types `SPECIFICATION_IMPORTED`, `SPECIFICATION_ACTIVATED` |
 | `V8__deterministic_test_generation.sql` | `test_cases` gains `scenario_key`, `spec_location`, `enabled`, `user_modified`, `sort_order`; categories `STRING_LENGTH`, `ARRAY_LENGTH`, `CONTENT_TYPE` added and the unused `REQUIRED_FIELD` removed; one GENERATED suite per project; audit type `TESTS_GENERATED` |
 | `V9__execution_engine.sql` | `environments.default_headers`; `test_runs.kind` (`TEST_RUN`, `AD_HOC`) and `status_reason`; `test_results.correlation_id`; error kind `CANCELLED`; audit types `ENVIRONMENT_CHANGED`, `SECRET_CHANGED`, `RUN_STARTED`, `RUN_CANCELLED`, `OUTBOUND_BLOCKED` |
+| `V10__result_reporting.sql` | Index `ix_test_results_run_outcome (test_run_id, outcome, executed_at)` for outcome filters; `test_results.time_to_headers_ms` with `ck_test_results_time_to_headers` (≥ 0 and ≤ `duration_ms`) |
 
-Applied migrations are never edited; corrections are new migrations. Verified on an empty database (Testcontainers) and incrementally on the development database (V1 → V6 in Phase 2, V6 → V7 in Phase 3, V7 → V8 in Phase 4, V8 → V9 in Phase 5).
+Applied migrations are never edited; corrections are new migrations. Verified on an empty database (Testcontainers) and incrementally on the development database (V1 → V6 in Phase 2, V6 → V7 in Phase 3, V7 → V8 in Phase 4, V8 → V9 in Phase 5, V9 → V10 in Phase 6).
 
 ## 3. Integrity rules enforced by the database
 

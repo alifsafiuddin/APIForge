@@ -2,12 +2,13 @@
 
 A full-stack developer tool for **contract-driven API testing**. You import an OpenAPI 3.x specification, explore its endpoints, and generate deterministic test scenarios from its schemas. APIForge AI then runs them against an API you are authorized to test, validates every response against the documented contract, tracks specification coverage, and can ask a **locally hosted** LLM (Ollama) to explain failures.
 
-> **Status: Phase 5 (secure execution engine) complete.**
+> **Status: Phase 6 (response contract validation and reporting) complete.**
 > What runs today:
 > - Registration and sign-in (sessions, CSRF, lockout, rate limiting, audit trail) and private API projects.
 > - **OpenAPI 3.0/3.1 import** with immutable versions and a **specification explorer**.
 > - **Deterministic test generation** with a review and curation workspace.
 > - **Environments**: base URL, timeouts, redirects, execution policy, authentication (bearer, basic, API key), default headers, variables; secret variables are AES-256-GCM encrypted and write-only.
+> - **Contract validation and reporting**: every response is checked against the active specification — documented status, media type, JSON syntax and the response schema (types, required fields, nested objects, arrays, enums, constraints, formats) — with a JSON path, expected and actual value per finding. Skipped and inconclusive checks are shown as such, never as passes. Runs can be filtered by outcome, results show assertions, the response body with findings marked, and timing, and a run can be compared with an earlier one.
 > - **Secure execution**: test runs (asynchronous, cancellable, per-user limits) and a console for single requests, against an API you are authorized to test. Private, loopback, link-local, multicast and cloud metadata destinations are blocked, DNS is validated before connecting (rebinding-safe), every redirect is re-checked, and secrets are redacted from everything that is stored, returned or logged.
 >
 > Contract validation of response bodies, coverage and AI are **not implemented yet**. See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
@@ -65,6 +66,8 @@ To try test generation: import [`samples/warehouse-lab-openapi.yaml`](samples/),
 
 To execute tests: start the local sample API with `node samples/warehouse-lab-server.mjs` (it listens on `127.0.0.1:8090`, the only destination the dev profile trusts). On **Environments**, create an environment with base URL `http://127.0.0.1:8090`, authentication *API key in a header* (`X-API-Key`, variable `API_KEY`), and add the secret variable `API_KEY` = `lab-demo-key`. Then use **Run** on the Tests tab, follow the run under **Runs**, or send single requests from the **Console** (for example `/lab/slow`, `/lab/malformed` or `/lab/redirect-metadata` to see timeouts, malformed responses and blocked redirects).
 
+To see contract validation: open a run under **Runs**. Filter it by outcome, open a result to see each assertion with expected and actual values, the response body with failing JSON paths marked, and the timing, or choose **Compare with previous run**. Restart the sample with `WAREHOUSE_LAB_VIOLATIONS=1` and run again to see status, media-type and schema violations reported ([samples/README.md](samples/README.md) lists them).
+
 The Vite dev server proxies `/api` and `/actuator` to the backend, so the browser only talks to one origin and the session cookie stays first-party.
 
 ## Commands
@@ -101,7 +104,8 @@ All `/api/v1/**` endpoints require a signed-in session unless marked public. Sta
 | `GET, POST /api/v1/projects/{id}/environments`; `GET, PUT, DELETE …/environments/{envId}`; `PUT, DELETE …/variables/{name}` | Environments and variables (secrets write-only) |
 | `POST /api/v1/projects/{id}/runs`, `POST …/runs/{runId}/cancel` | Start a run of tests (202, poll the run) / cancel it |
 | `POST /api/v1/projects/{id}/executions` | Send one request now (console) |
-| `GET /api/v1/projects/{id}/runs[/{runId}[/results[/{resultId}]]]` | Run history and results (redacted request and response, checks) |
+| `GET /api/v1/projects/{id}/runs[/{runId}[/results[/{resultId}]]]` | Run history and results (redacted request and response, contract assertions); `?outcome=` filters results |
+| `GET /api/v1/projects/{id}/runs/{runId}/comparison[?baseline=]` | Outcome changes against the previous (or a chosen) run |
 
 Every response carries an `X-Request-Id` header. Errors use `application/problem+json` with a stable `code`.
 

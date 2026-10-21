@@ -94,7 +94,7 @@ class TestGenerationIntegrationTest {
         assertThat(report.path("operations").asInt()).isEqualTo(7);
         assertThat(report.path("specificationVersionNumber").asInt()).isEqualTo(1);
         assertThat(report.path("created").asInt()).isEqualTo(total).isGreaterThan(100);
-        assertThat(report.path("generatorVersion").asString()).isEqualTo("1");
+        assertThat(report.path("generatorVersion").asString()).isEqualTo("2");
         assertThat(report.path("skipped").findValuesAsString("reason"))
                 .anyMatch(reason -> reason.contains("changes the URL to a different route"))
                 .anyMatch(reason -> reason.contains("oneOf/anyOf"));
@@ -117,7 +117,7 @@ class TestGenerationIntegrationTest {
         assertThat(missingName.path("rationale").asString())
                 .isEqualTo("'name' is listed in 'required' of schema NewProduct. The request omits it.");
         assertThat(missingName.path("specLocation").asString()).isEqualTo("#/components/schemas/NewProduct/required");
-        assertThat(missingName.path("generatorVersion").asString()).isEqualTo("1");
+        assertThat(missingName.path("generatorVersion").asString()).isEqualTo("2");
         assertThat(missingName.path("sourceSpecificationVersionId").asString())
                 .isEqualTo(report.path("specificationVersionId").asString());
         JsonNode request = missingName.path("request");

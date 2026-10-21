@@ -42,6 +42,8 @@ flowchart LR
 
 Everything in the *Untrusted input* box is treated as data. Even response bodies from a "trusted" demo target are rendered as text and limited in size.
 
+**Response bodies in contract validation (Phase 6).** Bodies are parsed only when they declare JSON and were not truncated (at most the 2 MB read limit; Jackson's default nesting and length constraints apply). Schema `pattern`s from the specification run under the same backtracking budget as in generation (ADR-025), so a hostile pattern or body makes the check `INCONCLUSIVE` instead of hanging a run. Findings quote at most a short description of the actual value, never the whole body, and every message, expected and actual value passes through the `Redactor` before it is stored. The body tree in the UI renders values as text (React escaping), not markup.
+
 ## 3. Authentication and sessions ✅ Phase 2
 
 | Control | Implementation | Verified by |

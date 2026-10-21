@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatDateTime } from '@/lib/format'
 
 import { type Run, useRuns } from './api'
+import { OutcomeBar } from './RunDetailPage'
 
 export function RunStatusBadge({ run }: { run: Run }) {
   const variant = run.status === 'COMPLETED' ? 'secondary' : run.status === 'RUNNING' || run.status === 'QUEUED' ? 'default' : 'destructive'
@@ -65,6 +66,7 @@ export function RunsPage() {
                   {run.environmentName ?? 'deleted environment'} · {run.baseUrl}
                 </span>
                 <span className="flex-1" />
+                <OutcomeBar run={run} className="w-24" />
                 <Counts run={run} />
                 <span className="text-xs text-muted-foreground">{formatDateTime(run.createdAt)}</span>
               </Link>

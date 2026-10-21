@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 
 import { apiRequest } from '@/api/client'
@@ -46,11 +46,28 @@ export const resultSummarySchema = z.object({
   durationMs: z.number().nullable(),
   errorKind: z.string().nullable(),
   errorMessage: z.string().nullable(),
+  failedChecks: z.number(),
+  /** Checks that did not run (SKIPPED, or NOT_EVALUATED in older results); never counted as passes. */
+  skippedChecks: z.number(),
+  firstFailure: z.string().nullable(),
   executedAt: z.string(),
 })
 export type ResultSummary = z.infer<typeof resultSummarySchema>
 
-const checkSchema = z.object({ name: z.string(), result: z.string(), message: z.string() })
+/** PASS, FAIL, SKIPPED and INCONCLUSIVE; results recorded before contract validation may say NOT_EVALUATED. */
+export const CHECK_RESULTS = ['PASS', 'FAIL', 'SKIPPED', 'INCONCLUSIVE', 'NOT_EVALUATED'] as const
+export type CheckResult = (typeof CHECK_RESULTS)[number]
+
+const checkSchema = z.object({
+  name: z.string(),
+  result: z.enum(CHECK_RESULTS),
+  message: z.string(),
+  /** JSON path of a body finding, e.g. $.items[0].price */
+  path: z.string().optional(),
+  keyword: z.string().optional(),
+  expected: z.string().optional(),
+  actual: z.string().optional(),
+})
 export type Check = z.infer<typeof checkSchema>
 
 export const resultDetailSchema = z.object({
@@ -75,17 +92,42 @@ export const resultDetailSchema = z.object({
   errorKind: z.string().nullable(),
   errorMessage: z.string().nullable(),
   durationMs: z.number().nullable(),
+  timeToHeadersMs: z.number().nullable(),
   correlationId: z.string().nullable(),
   testCase: z.record(z.string(), z.unknown()).nullable(),
   executedAt: z.string(),
 })
 export type ResultDetail = z.infer<typeof resultDetailSchema>
 
+export const CHANGE_KINDS = ['REGRESSED', 'FIXED', 'CHANGED', 'NEW', 'REMOVED', 'UNCHANGED'] as const
+export type ChangeKind = (typeof CHANGE_KINDS)[number]
+
+export const comparisonSchema = z.object({
+  baseline: runSchema,
+  current: runSchema,
+  counts: z.record(z.enum(CHANGE_KINDS), z.number()),
+  changes: z.array(
+    z.object({
+      testName: z.string().nullable(),
+      operationKey: z.string(),
+      testCaseId: z.string().nullable(),
+      baselineOutcome: z.enum(OUTCOMES).nullable(),
+      currentOutcome: z.enum(OUTCOMES).nullable(),
+      kind: z.enum(CHANGE_KINDS),
+      baselineResultId: z.string().nullable(),
+      currentResultId: z.string().nullable(),
+    }),
+  ),
+})
+export type RunComparison = z.infer<typeof comparisonSchema>
+
 export const runKeys = {
   all: (projectId: string) => ['runs', projectId] as const,
   list: (projectId: string, page: number) => ['runs', projectId, 'list', page] as const,
   run: (projectId: string, runId: string) => ['runs', projectId, 'run', runId] as const,
-  results: (projectId: string, runId: string) => ['runs', projectId, 'results', runId] as const,
+  results: (projectId: string, runId: string, outcome: Outcome | undefined, page: number) =>
+    ['runs', projectId, 'results', runId, outcome ?? 'ALL', page] as const,
+  comparison: (projectId: string, runId: string, baseline: string | undefined) => ['runs', projectId, 'comparison', runId, baseline ?? 'previous'] as const,
   result: (projectId: string, runId: string, resultId: string) => ['runs', projectId, 'result', runId, resultId] as const,
 }
 
@@ -110,12 +152,34 @@ export function useRun(projectId: string, runId: string) {
   })
 }
 
-export function useRunResults(projectId: string, runId: string, active: boolean) {
+export const RESULTS_PAGE_SIZE = 100
+
+/** One page of a run's results in execution order, optionally only those with one outcome. */
+export function useRunResults(projectId: string, runId: string, active: boolean, outcome: Outcome | undefined, page: number) {
   return useQuery({
-    queryKey: runKeys.results(projectId, runId),
+    queryKey: runKeys.results(projectId, runId, outcome, page),
+    placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
-      apiRequest(`${base(projectId)}/runs/${runId}/results?size=100`, pageSchema(resultSummarySchema), { signal }),
+      apiRequest(
+        `${base(projectId)}/runs/${runId}/results?size=${RESULTS_PAGE_SIZE}&page=${page}${outcome ? `&outcome=${outcome}` : ''}`,
+        pageSchema(resultSummarySchema),
+        { signal },
+      ),
     refetchInterval: active ? 1000 : false,
+  })
+}
+
+/** Outcome changes against `baseline`, or against the previous run of the same kind. */
+export function useRunComparison(projectId: string, runId: string, baseline: string | undefined) {
+  return useQuery({
+    queryKey: runKeys.comparison(projectId, runId, baseline),
+    queryFn: ({ signal }) =>
+      apiRequest(
+        `${base(projectId)}/runs/${runId}/comparison${baseline ? `?baseline=${encodeURIComponent(baseline)}` : ''}`,
+        comparisonSchema,
+        { signal },
+      ),
+    retry: false,
   })
 }
 

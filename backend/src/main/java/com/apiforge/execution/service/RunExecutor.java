@@ -39,6 +39,8 @@ import com.apiforge.outbound.OutboundResult;
 import com.apiforge.testcase.domain.Expectations;
 import com.apiforge.testcase.domain.RequestTemplate;
 import com.apiforge.testcase.domain.TestCase.RiskLevel;
+import com.apiforge.validation.Assertion;
+import com.apiforge.validation.ContractValidator;
 
 /**
  * Executes runs on a bounded pool. Limits: concurrent runs per user and overall, requests per
@@ -53,7 +55,8 @@ public class RunExecutor implements DisposableBean {
             Map<String, Object> testSnapshot, RequestTemplate request, Expectations expectations) {
     }
 
-    record Plan(UUID runId, UUID userId, UUID projectId, ExecutionEnvironment environment, List<Item> items) {
+    record Plan(UUID runId, UUID userId, UUID projectId, ExecutionEnvironment environment, ContractContext contract,
+            List<Item> items) {
     }
 
     private static final Logger log = LoggerFactory.getLogger(RunExecutor.class);
@@ -140,7 +143,7 @@ public class RunExecutor implements DisposableBean {
                     if (!awaitPermit(plan.userId(), cancellation)) {
                         result = skipped(plan.runId(), item, "The run was cancelled before this test was executed.");
                     } else {
-                        result = execute(plan.runId(), plan.environment(), item, cancellation);
+                        result = execute(plan.runId(), plan.environment(), plan.contract(), item, cancellation);
                     }
                 }
                 recorder.record(plan.runId(), result);
@@ -178,7 +181,8 @@ public class RunExecutor implements DisposableBean {
     }
 
     /** Executes one item and builds its (redacted) result; never throws for target-side problems. */
-    TestResult execute(UUID runId, ExecutionEnvironment environment, Item item, Cancellation cancellation) {
+    TestResult execute(UUID runId, ExecutionEnvironment environment, ContractContext contract, Item item,
+            Cancellation cancellation) {
         String correlationId = UUID.randomUUID().toString();
         if (!allows(environment.executionPolicy(), item.risk())) {
             return skipped(runId, item, "Environment '%s' only allows %s requests (policy %s); this %s test was not sent."
@@ -214,8 +218,16 @@ public class RunExecutor implements DisposableBean {
         }
         OutboundResult.Response response = (OutboundResult.Response) outcome;
         String text = decode(response.body(), response.contentType());
-        OutcomeEvaluator.Evaluation evaluation = OutcomeEvaluator.evaluate(item.expectations(), response.status(),
-                response.contentType(), text, response.truncated());
+        List<Assertion> assertions = contract.validator().validate(
+                contract.find(item.operationKey(), item.method(), item.path()),
+                new ContractValidator.ActualResponse(response.status(), response.contentType(), text, response.sizeBytes(),
+                        response.truncated()),
+                item.expectations().validateResponseSchema());
+        // Assertions quote values from the body: they are redacted like the body itself.
+        List<Assertion> redacted = assertions.stream().map(assertion -> new Assertion(assertion.check(), assertion.result(),
+                redactor.text(assertion.message()), assertion.path(), assertion.keyword(), redactor.text(assertion.expected()),
+                redactor.text(assertion.actual()))).toList();
+        OutcomeEvaluator.Evaluation evaluation = OutcomeEvaluator.evaluate(item.expectations(), response.status(), redacted);
         String stored = redactor.text(text);
         boolean storedTruncated = false;
         long storedLimit = properties.storedBodySize().toBytes();
@@ -225,7 +237,8 @@ public class RunExecutor implements DisposableBean {
         }
         TestResult.ResponseData data = new TestResult.ResponseData(response.status(), redactor.headers(response.headers()),
                 stored, response.sizeBytes(), response.truncated() || storedTruncated,
-                response.contentType() == null ? null : truncate(response.contentType(), 255));
+                response.contentType() == null ? null : truncate(response.contentType(), 255),
+                (int) response.timeToHeadersMs());
         return TestResult.evaluated(runId, item.testCaseId(), item.operationKey(), item.testSnapshot(), requestSnapshot,
                 data, evaluation.outcome(), evaluation.checks(), (int) response.durationMs(), now)
                 .correlatedWith(correlationId);

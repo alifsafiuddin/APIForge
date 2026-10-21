@@ -14,6 +14,10 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
+import com.apiforge.schema.GuardedPattern;
+import com.apiforge.schema.Pointers;
+import com.apiforge.schema.Schema;
+import com.apiforge.schema.SchemaValidator;
 import com.apiforge.common.json.JsonValues;
 import com.github.curiousoddman.rgxgen.RgxGen;
 import com.github.curiousoddman.rgxgen.config.RgxGenOption;

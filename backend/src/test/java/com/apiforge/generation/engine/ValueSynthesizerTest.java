@@ -1,7 +1,7 @@
 package com.apiforge.generation.engine;
 
-import static com.apiforge.generation.engine.Schemas.schema;
-import static com.apiforge.generation.engine.Schemas.toJson;
+import static com.apiforge.schema.Schemas.schema;
+import static com.apiforge.schema.Schemas.toJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
@@ -12,9 +12,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import com.apiforge.schema.GuardedPattern;
+import com.apiforge.schema.Schema;
+import com.apiforge.schema.SchemaValidator;
+import com.apiforge.schema.Schemas;
+
 class ValueSynthesizerTest {
 
-    private final ValueSynthesizer synthesizer = Schemas.synthesizer();
+    private final ValueSynthesizer synthesizer = synthesizer();
+
+    private static ValueSynthesizer synthesizer() {
+        GuardedPattern patterns = new GuardedPattern();
+        return new ValueSynthesizer(new SchemaValidator(patterns), patterns);
+    }
     private final SchemaValidator validator = Schemas.validator();
 
     private Object valid(String json) {

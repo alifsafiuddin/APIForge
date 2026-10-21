@@ -125,6 +125,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Product'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
     patch:
@@ -146,8 +148,12 @@ paths:
                 $ref: '#/components/schemas/Product'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '415':
+          description: Unsupported media type
     delete:
       tags: [products]
       operationId: deleteProduct
@@ -155,6 +161,8 @@ paths:
       responses:
         '204':
           description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
   /orders:
@@ -177,12 +185,16 @@ paths:
                 $ref: '#/components/schemas/Order'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '409':
           description: Not enough stock
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '415':
+          description: Unsupported media type
 components:
   securitySchemes:
     apiKeyAuth:

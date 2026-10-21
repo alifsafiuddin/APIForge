@@ -192,6 +192,7 @@ class OutboundHttpClientTest {
         assertThat(response.sizeBytes()).isEqualTo(response.body().length);
         assertThat(response.truncated()).isFalse();
         assertThat(response.durationMs()).isNotNegative();
+        assertThat(response.timeToHeadersMs()).isBetween(0L, response.durationMs());
     }
 
     @Test

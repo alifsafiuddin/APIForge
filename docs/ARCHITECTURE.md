@@ -69,7 +69,8 @@ flowchart TB
     gen[generation<br/>deterministic generators]
     exec[execution<br/>runs, request building, history]
     outbound[outbound<br/>SSRF guard, HTTP client, limits]
-    validation[validation<br/>contract validation, outcome rules]
+    validation[validation<br/>contract validation]
+    schema[schema<br/>shared JSON Schema validator]
     coverage[coverage<br/>metrics]
     ai[ai<br/>Spring AI gateway, prompts,<br/>output validation, fallback]
     dashboard[dashboard<br/>read models]
@@ -81,9 +82,9 @@ flowchart TB
     spec --> project
     env --> project & secrets
     testcase --> spec
-    gen --> spec & testcase
+    gen --> spec & testcase & schema
     exec --> env & testcase & outbound & validation & secrets
-    validation --> spec
+    validation --> schema
     coverage --> spec & testcase & exec
     ai --> spec & testcase & exec & secrets
     dashboard --> project & exec & coverage
@@ -95,7 +96,7 @@ Rules (enforced by ArchUnit from Phase 2, when the first layered modules exist):
 2. Entities never leave the service layer; controllers return DTOs (records).
 3. Only `outbound` may construct HTTP clients for user-supplied destinations.
 4. Only `ai` may depend on Spring AI types.
-5. Only `spec` and `validation` may depend on swagger-parser / openapi-request-validator types.
+5. Only `spec` may depend on swagger-parser types. JSON Schema evaluation for generated requests and for responses lives in `schema` (ADR-027); `validation` adds the HTTP-level contract checks on top.
 6. No cyclic dependencies between modules.
 
 ### 3.2 Layers inside a module
@@ -162,10 +163,10 @@ sequenceDiagram
         O->>O: OutboundGuard: scheme/port/DNS/IP checks,<br/>connect only to validated IPs, size + time limits,<br/>manual redirect revalidation
         O-->>R: response or classified transport error
         R->>V: validate(specVersion, operation, response)
-        V-->>R: findings (status, content type, schema)
+        V-->>R: assertions (documented status, content type,<br/>JSON syntax, body schema with JSON paths)
         R->>E: evaluate(expectations, findings, check states)
         E-->>R: PASSED / FAILED / INCONCLUSIVE / ERROR
-        R->>DB: insert test_execution (redacted snapshot) + validation_finding rows
+        R->>DB: insert test_results row (redacted snapshot, assertions, timing)
     end
     R->>DB: complete test_run with totals
 ```

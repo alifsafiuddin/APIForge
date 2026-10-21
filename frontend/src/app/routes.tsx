@@ -12,6 +12,7 @@ import { SpecOverview } from '@/features/specs/SpecOverview'
 import { TestsPage } from '@/features/tests/TestsPage'
 import { EnvironmentsPage } from '@/features/environments/EnvironmentsPage'
 import { ConsolePage } from '@/features/runs/ConsolePage'
+import { RunComparisonPage } from '@/features/runs/RunComparisonPage'
 import { RunDetailPage } from '@/features/runs/RunDetailPage'
 import { RunsPage } from '@/features/runs/RunsPage'
 
@@ -62,6 +63,7 @@ export const routes: RouteObject[] = [
               { path: 'environments', element: <EnvironmentsPage /> },
               { path: 'runs', element: <RunsPage /> },
               { path: 'runs/:runId', element: <RunDetailPage /> },
+              { path: 'runs/:runId/compare', element: <RunComparisonPage /> },
               { path: 'console', element: <ConsolePage /> },
             ],
           },

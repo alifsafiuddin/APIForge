@@ -17,6 +17,7 @@ import com.apiforge.outbound.OutboundRequest.Header;
 import com.apiforge.testcase.domain.Expectations;
 import com.apiforge.testcase.domain.Expectations.ResponseCheck;
 import com.apiforge.testcase.domain.TestCase.RiskLevel;
+import com.apiforge.validation.Assertion;
 
 class RedactorAndEvaluatorTest {
 
@@ -66,37 +67,32 @@ class RedactorAndEvaluatorTest {
     }
 
     @Test
-    void documentedJsonResponsePasses() {
-        OutcomeEvaluator.Evaluation evaluation = OutcomeEvaluator.evaluate(CREATED, 201, "application/json; charset=utf-8",
-                "{\"id\":1}", false);
+    void expectedStatusAndContractPassesGivePassed() {
+        OutcomeEvaluator.Evaluation evaluation = OutcomeEvaluator.evaluate(CREATED, 201,
+                List.of(Assertion.pass("STATUS_DOCUMENTED", "ok"), Assertion.skipped("BODY_SCHEMA", "no schema")));
 
         assertThat(evaluation.outcome()).isEqualTo(Outcome.PASSED);
-        assertThat(evaluation.checks()).extracting(check -> check.get("name") + "=" + check.get("result")).containsExactly(
-                "STATUS=PASS", "CONTENT_TYPE=PASS", "JSON_SYNTAX=PASS", "RESPONSE_SCHEMA=NOT_EVALUATED");
+        assertThat(evaluation.checks()).extracting(check -> check.get("name") + "=" + check.get("result"))
+                .containsExactly("STATUS=PASS", "STATUS_DOCUMENTED=PASS", "BODY_SCHEMA=SKIPPED");
+        assertThat(evaluation.checks().getFirst()).containsEntry("expected", "201").containsEntry("actual", "201");
     }
 
     @Test
-    void wrongStatusContentTypeOrSyntaxFails() {
-        assertThat(OutcomeEvaluator.evaluate(CREATED, 200, "application/json", "{}", false).checks())
-                .extracting(check -> check.get("name") + "=" + check.get("result")).containsExactly("STATUS=FAIL", "JSON_SYNTAX=PASS");
-        OutcomeEvaluator.Evaluation html = OutcomeEvaluator.evaluate(CREATED, 201, "text/html", "<html>", false);
-        assertThat(html.outcome()).isEqualTo(Outcome.FAILED);
-        assertThat(html.checks()).extracting(check -> check.get("name") + "=" + check.get("result"))
-                .contains("CONTENT_TYPE=FAIL", "JSON_SYNTAX=FAIL");
-        OutcomeEvaluator.Evaluation broken = OutcomeEvaluator.evaluate(CREATED, 201, "application/json",
-                "{\"secret\": \"x\"", false);
-        assertThat(broken.outcome()).isEqualTo(Outcome.FAILED);
-        assertThat(broken.checks().get(2).get("message").toString()).startsWith("The body is not valid JSON: unexpected")
-                .doesNotContain("secret");
-    }
+    void anyFailureFailsAndInconclusiveIsNeverAPass() {
+        OutcomeEvaluator.Evaluation wrongStatus = OutcomeEvaluator.evaluate(CREATED, 200, List.of());
+        OutcomeEvaluator.Evaluation contractFailure = OutcomeEvaluator.evaluate(CREATED, 201,
+                List.of(Assertion.fail("BODY_SCHEMA", "bad", "integer", "string")));
+        OutcomeEvaluator.Evaluation undecided = OutcomeEvaluator.evaluate(CREATED, 201,
+                List.of(Assertion.inconclusive("BODY_SCHEMA", "truncated")));
+        OutcomeEvaluator.Evaluation both = OutcomeEvaluator.evaluate(CREATED, 201,
+                List.of(Assertion.inconclusive("JSON_SYNTAX", "x"), Assertion.fail("CONTENT_TYPE", "y", "a", "b")));
 
-    @Test
-    void truncatedBodiesAreNotParsedAndUndocumentedResponsesOnlyCheckTheStatus() {
-        assertThat(OutcomeEvaluator.evaluate(CREATED, 201, "application/json", "{\"a\":", true).checks())
-                .extracting(check -> check.get("name") + "=" + check.get("result")).contains("JSON_SYNTAX=NOT_EVALUATED");
-        Expectations anyError = new Expectations(List.of("4XX"), "Rejected.", false, List.of());
-        assertThat(OutcomeEvaluator.evaluate(anyError, 400, "text/plain", "bad", false).checks()).hasSize(1);
-        assertThat(OutcomeEvaluator.evaluate(anyError, 400, null, null, false).outcome()).isEqualTo(Outcome.PASSED);
+        assertThat(wrongStatus.outcome()).isEqualTo(Outcome.FAILED);
+        assertThat(wrongStatus.checks().getFirst()).containsEntry("result", "FAIL").containsEntry("expected", "201")
+                .containsEntry("actual", "200");
+        assertThat(contractFailure.outcome()).isEqualTo(Outcome.FAILED);
+        assertThat(undecided.outcome()).isEqualTo(Outcome.INCONCLUSIVE);
+        assertThat(both.outcome()).isEqualTo(Outcome.FAILED);
     }
 
     @ParameterizedTest

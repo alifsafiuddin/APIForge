@@ -1,7 +1,7 @@
-package com.apiforge.generation.engine;
+package com.apiforge.schema;
 
-import static com.apiforge.generation.engine.Schemas.schema;
-import static com.apiforge.generation.engine.Schemas.value;
+import static com.apiforge.schema.Schemas.schema;
+import static com.apiforge.schema.Schemas.value;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
@@ -166,7 +166,7 @@ class SchemaValidatorTest {
         }
 
         @Test
-        void formatIsAnAnnotationAndNotAsserted() {
+        void formatIsAnAnnotationInRequests() {
             assertThat(validate("\"not-an-email\"", "{\"type\":\"string\",\"format\":\"email\"}").valid()).isTrue();
         }
     }
@@ -345,5 +345,94 @@ class SchemaValidatorTest {
         assertThat(single.onlyViolates("/a", Set.of("enum"))).isFalse();
         assertThat(two.onlyViolates("/a", Set.of("type"))).isFalse();
         assertThat(validate("{}", "{}").onlyViolates("", Set.of("type"))).isFalse();
+    }
+
+    @Nested
+    class Responses {
+
+        private SchemaValidator.Result response(String instance, String schema) {
+            return validator.validate(value(instance), schema(schema), SchemaValidator.Direction.RESPONSE);
+        }
+
+        @ParameterizedTest
+        @CsvSource(delimiter = '|', textBlock = """
+                date          | "2026-10-21"                            | true
+                date          | "2026-02-30"                            | false
+                date-time     | "2026-10-21T10:15:30Z"                  | true
+                date-time     | "2026-10-21T10:15:30.5+02:00"           | true
+                date-time     | "2026-10-21 10:15"                      | false
+                time          | "10:15:30Z"                             | true
+                time          | "25:00:00"                              | false
+                uuid          | "3f2504e0-4f89-11d3-9a0c-0305e82c3301"  | true
+                uuid          | "3f2504e0"                              | false
+                email         | "ops@example.com"                       | true
+                email         | "not-an-email"                          | false
+                ipv4          | "192.168.0.1"                           | true
+                ipv4          | "256.1.1.1"                             | false
+                ipv6          | "2001:db8::1"                           | true
+                ipv6          | "2001:db8::g"                           | false
+                hostname      | "api.example.com"                       | true
+                hostname      | "-bad-.example"                         | false
+                uri           | "https://example.com/a?b=c"             | true
+                uri           | "/relative"                             | false
+                uri-reference | "/relative"                             | true
+                byte          | "aGVsbG8="                              | true
+                byte          | "***"                                   | false
+                x-custom      | "anything"                              | true
+                """)
+        void commonFormatsAreAsserted(String format, String instance, boolean valid) {
+            assertThat(response(instance, "{\"type\":\"string\",\"format\":\"" + format + "\"}").valid()).isEqualTo(valid);
+        }
+
+        @ParameterizedTest
+        @CsvSource({"int32, 2147483647, true", "int32, 2147483648, false", "int64, 9223372036854775807, true",
+                "int64, 9223372036854775808, false"})
+        void integerFormatsBoundTheValue(String format, String instance, boolean valid) {
+            assertThat(response(instance, "{\"type\":\"integer\",\"format\":\"" + format + "\"}").valid())
+                    .isEqualTo(valid);
+        }
+
+        @Test
+        void readOnlyAndWriteOnlyRulesAreMirrored() {
+            String account = """
+                    {"type":"object","required":["id","password"],
+                     "properties":{"id":{"type":"integer","readOnly":true},"password":{"type":"string","writeOnly":true}}}""";
+
+            assertThat(response("{\"id\":1}", account).valid()).isTrue();
+            assertThat(response("{}", account).violations()).extracting(SchemaValidator.Violation::pointer,
+                    SchemaValidator.Violation::keyword).containsExactly(org.assertj.core.groups.Tuple.tuple("/id", "required"));
+            assertThat(response("{\"id\":1,\"password\":\"hunter2\"}", account).violations())
+                    .extracting(SchemaValidator.Violation::pointer, SchemaValidator.Violation::keyword)
+                    .containsExactly(org.assertj.core.groups.Tuple.tuple("/password", "writeOnly"));
+            assertThat(validate("{\"password\":\"x\"}", account).valid()).isTrue();
+        }
+
+        @Test
+        void violationsCarryExpectedAndActualValues() {
+            SchemaValidator.Violation violation = response("{\"items\":[{\"qty\":101}]}", """
+                    {"properties":{"items":{"type":"array","items":{"properties":{"qty":{"type":"integer","maximum":100}}}}}}""")
+                    .violations().getFirst();
+
+            assertThat(violation.pointer()).isEqualTo("/items/0/qty");
+            assertThat(violation.jsonPath()).isEqualTo("$.items[0].qty");
+            assertThat(violation.expected()).isEqualTo("≤ 100");
+            assertThat(violation.actual()).isEqualTo("101");
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            ''                 | $
+            /items/2/price     | $.items[2].price
+            /a~1b/x            | $['a/b'].x
+            /first name        | $['first name']
+            """)
+    void pointersBecomeJsonPaths(String pointer, String path) {
+        assertThat(JsonPaths.fromPointer(pointer)).isEqualTo(path);
+    }
+
+    @Test
+    void quotesInJsonPathKeysAreEscaped() {
+        assertThat(JsonPaths.fromPointer("/it's")).isEqualTo("$['it\\'s']");
     }
 }

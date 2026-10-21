@@ -42,7 +42,7 @@ public class HistoryFixtures {
         TestResult passed = results.saveAndFlush(TestResult.evaluated(runId, null, "GET /pets",
                 Map.of("name", "List pets"), Map.of("method", "GET", "url", "https://staging.example.test/pets"),
                 new TestResult.ResponseData(200, Map.of("content-type", "application/json"), "[]", 2, false,
-                        "application/json"),
+                        "application/json", 30),
                 TestResult.Outcome.PASSED, List.of(Map.of("name", "status", "state", "PASS")), 42, now));
         TestResult errored = results.saveAndFlush(TestResult.failed(runId, null, "POST /pets",
                 Map.of("name", "Create pet"), Map.of("method", "POST", "url", "https://staging.example.test/pets"),

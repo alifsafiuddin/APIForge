@@ -8,12 +8,15 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.apiforge.auth.service.AuthenticatedUser;
 import com.apiforge.common.web.PageResponse;
 import com.apiforge.execution.service.ExecutionHistoryService;
+import com.apiforge.execution.domain.TestResult;
 import com.apiforge.execution.service.ExecutionHistoryViews.ResultDetail;
+import com.apiforge.execution.service.ExecutionHistoryViews.RunComparison;
 import com.apiforge.execution.service.ExecutionHistoryViews.ResultSummary;
 import com.apiforge.execution.service.ExecutionHistoryViews.RunView;
 
@@ -42,8 +45,16 @@ public class ExecutionHistoryController {
 
     @GetMapping("/{runId}/results")
     public PageResponse<ResultSummary> listResults(@AuthenticationPrincipal AuthenticatedUser user,
-            @PathVariable UUID projectId, @PathVariable UUID runId, @PageableDefault(size = 50) Pageable pageable) {
-        return PageResponse.of(history.listResults(user.id(), projectId, runId, pageable));
+            @PathVariable UUID projectId, @PathVariable UUID runId,
+            @RequestParam(required = false) TestResult.Outcome outcome, @PageableDefault(size = 50) Pageable pageable) {
+        return PageResponse.of(history.listResults(user.id(), projectId, runId, outcome, pageable));
+    }
+
+    /** Outcome changes against {@code baseline}, or against the previous run of the same kind. */
+    @GetMapping("/{runId}/comparison")
+    public RunComparison compare(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable UUID projectId,
+            @PathVariable UUID runId, @RequestParam(required = false) UUID baseline) {
+        return history.compare(user.id(), projectId, runId, baseline);
     }
 
     @GetMapping("/{runId}/results/{resultId}")

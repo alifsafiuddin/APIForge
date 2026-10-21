@@ -1,4 +1,4 @@
-package com.apiforge.generation.engine;
+package com.apiforge.schema;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -9,24 +9,24 @@ import java.util.Map;
  * JSON Pointer (RFC 6901) navigation over JSON values, plus readable field names. Updates are
  * copy-on-write: the containers along the pointer are copied, the input is never changed.
  */
-final class Pointers {
+public final class Pointers {
 
     private Pointers() {
     }
 
-    static String escape(String token) {
+    public static String escape(String token) {
         return token.replace("~", "~0").replace("/", "~1");
     }
 
-    static String unescape(String token) {
+    public static String unescape(String token) {
         return token.replace("~1", "/").replace("~0", "~");
     }
 
-    static String child(String pointer, String token) {
+    public static String child(String pointer, String token) {
         return pointer + "/" + escape(token);
     }
 
-    static List<String> tokens(String pointer) {
+    public static List<String> tokens(String pointer) {
         List<String> tokens = new ArrayList<>();
         if (pointer.isEmpty()) {
             return tokens;
@@ -38,16 +38,16 @@ final class Pointers {
     }
 
     /** A copy of {@code root} with the value at {@code pointer} replaced (the empty pointer replaces the root). */
-    static Object with(Object root, String pointer, Object value) {
+    public static Object with(Object root, String pointer, Object value) {
         return update(root, tokens(pointer), 0, value, false);
     }
 
     /** A copy of {@code root} without the object member at {@code pointer}. */
-    static Object without(Object root, String pointer) {
+    public static Object without(Object root, String pointer) {
         return update(root, tokens(pointer), 0, null, true);
     }
 
-    static Object get(Object root, String pointer) {
+    public static Object get(Object root, String pointer) {
         Object current = root;
         for (String token : tokens(pointer)) {
             if (current instanceof Map<?, ?> map) {
@@ -96,7 +96,7 @@ final class Pointers {
     }
 
     /** "/category/id" → "category.id", "/tags/0/name" → "tags[0].name", "/0/id" → "body[0].id", "" → "request body". */
-    static String fieldName(String pointer) {
+    public static String fieldName(String pointer) {
         if (pointer.isEmpty()) {
             return "request body";
         }

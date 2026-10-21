@@ -43,6 +43,9 @@ const SUMMARY: ResultSummary = {
   durationMs: 12,
   errorKind: null,
   errorMessage: null,
+  failedChecks: 0,
+  skippedChecks: 1,
+  firstFailure: null,
   executedAt: '2026-10-21T10:00:02Z',
 }
 
@@ -69,6 +72,7 @@ const DETAIL: ResultDetail = {
   errorKind: null,
   errorMessage: null,
   durationMs: 12,
+  timeToHeadersMs: 8,
   correlationId: 'corr-1',
   testCase: { name: 'Valid request' },
   executedAt: '2026-10-21T10:00:02Z',
@@ -120,7 +124,11 @@ describe('Runs', () => {
     const sheet = await screen.findByRole('dialog')
     expect(await within(sheet).findByText('http://127.0.0.1:8090/orders?api_key=«redacted»', { exact: false })).toBeInTheDocument()
     expect(within(sheet).getByText('X-API-Key: «redacted»')).toBeInTheDocument()
-    expect(within(sheet).getByText(/NOT EVALUATED · RESPONSE_SCHEMA/)).toBeInTheDocument()
+    // A result recorded before contract validation: the unevaluated check is shown as such, never as a pass.
+    const legacy = within(sheet).getByRole('row', { name: /RESPONSE_SCHEMA/ })
+    expect(within(legacy).getByText('NOT EVALUATED')).toBeInTheDocument()
+    expect(within(sheet).getByText('2 checks: 1 passed, 1 skipped (not validated)')).toBeInTheDocument()
+    expect(within(sheet).getByText(/1 check was skipped and is not counted as passed/)).toBeInTheDocument()
     expect(within(sheet).getByText(/corr-1/, { selector: 'span' })).toBeInTheDocument()
     await user.keyboard('{Escape}')
 

@@ -1,4 +1,4 @@
-package com.apiforge.generation.engine;
+package com.apiforge.schema;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -16,13 +16,13 @@ import com.apiforge.common.json.JsonValues;
  * Understands both OpenAPI 3.0 ({@code nullable}, boolean {@code exclusiveMinimum}) and 3.1
  * (type arrays, numeric {@code exclusiveMinimum}, {@code examples}, {@code const}).
  */
-final class Schema {
+public final class Schema {
 
     /** Marker stored in {@code merged} when allOf members cannot all hold at once. */
-    static final String PROBLEM_KEY = "x-apiforge-problem";
+    public static final String PROBLEM_KEY = "x-apiforge-problem";
 
     /** An inclusive or exclusive numeric bound. */
-    record Bound(BigDecimal value, boolean exclusive) {
+    public record Bound(BigDecimal value, boolean exclusive) {
     }
 
     private final SchemaResolver resolver;
@@ -50,65 +50,65 @@ final class Schema {
         this.never = never;
     }
 
-    static Schema any(SchemaResolver resolver, String location) {
+    public static Schema any(SchemaResolver resolver, String location) {
         return new Schema(resolver, Map.of(), Map.of(), location, null, null, false);
     }
 
-    static Schema never(SchemaResolver resolver, String location) {
+    public static Schema never(SchemaResolver resolver, String location) {
         return new Schema(resolver, Map.of(), Map.of(), location, null, null, true);
     }
 
-    static Schema unresolvable(SchemaResolver resolver, String location, String problem) {
+    public static Schema unresolvable(SchemaResolver resolver, String location, String problem) {
         return new Schema(resolver, Map.of(), Map.of(), location, null, problem, false);
     }
 
-    SchemaResolver resolver() {
+    public SchemaResolver resolver() {
         return resolver;
     }
 
     /** This node's own keywords only (allOf members not merged); used by the validator. */
-    Schema own() {
+    public Schema own() {
         Map<String, Object> own = new LinkedHashMap<>(raw);
         own.remove("allOf");
         return new Schema(resolver, raw, own, location, name, problem, never);
     }
 
-    Map<String, Object> raw() {
+    public Map<String, Object> raw() {
         return raw;
     }
 
-    Map<String, Object> merged() {
+    public Map<String, Object> merged() {
         return merged;
     }
 
     /** Specification location (JSON pointer) for explanations. */
-    String location() {
+    public String location() {
         return location;
     }
 
     /** Component name when reached through a reference, else {@code null}. */
-    String name() {
+    public String name() {
         return name;
     }
 
     /** Why the schema cannot be used, or {@code null}. */
-    String problem() {
+    public String problem() {
         return problem;
     }
 
-    boolean isNever() {
+    public boolean isNever() {
         return never;
     }
 
     /** "schema Pet" or "the schema at #/paths/...". */
-    String describe() {
+    public String describe() {
         return name != null ? "schema " + name : "the schema at " + location;
     }
 
     // --- Types ---
 
     /** Declared types, including "null" for 3.0 {@code nullable: true}; empty means any type. */
-    Set<String> declaredTypes() {
+    public Set<String> declaredTypes() {
         Set<String> types = new LinkedHashSet<>(SchemaResolver.typeList(merged.get("type")));
         if (Boolean.TRUE.equals(merged.get("nullable")) && !types.isEmpty()) {
             types.add("null");
@@ -116,13 +116,13 @@ final class Schema {
         return types;
     }
 
-    boolean allowsNull() {
+    public boolean allowsNull() {
         Set<String> types = declaredTypes();
         return types.isEmpty() || types.contains("null");
     }
 
     /** The type to synthesize: the first declared non-null type, else one inferred from the keywords. */
-    String primaryType() {
+    public String primaryType() {
         for (String type : declaredTypes()) {
             if (!"null".equals(type)) {
                 return type;
@@ -157,22 +157,22 @@ final class Schema {
         return type;
     }
 
-    boolean has(String keyword) {
+    public boolean has(String keyword) {
         return merged.containsKey(keyword);
     }
 
     // --- Values ---
 
-    List<?> enumValues() {
+    public List<?> enumValues() {
         return merged.get("enum") instanceof List<?> values ? values : null;
     }
 
-    Object constValue() {
+    public Object constValue() {
         return merged.get("const");
     }
 
     /** Documented example values: {@code example} (3.0) and the {@code examples} array (3.1). */
-    List<Object> examples() {
+    public List<Object> examples() {
         List<Object> examples = new ArrayList<>();
         if (merged.containsKey("example")) {
             examples.add(merged.get("example"));
@@ -183,25 +183,29 @@ final class Schema {
         return examples;
     }
 
-    String format() {
+    public String format() {
         return merged.get("format") instanceof String format ? format : null;
     }
 
-    String pattern() {
+    public String pattern() {
         return merged.get("pattern") instanceof String pattern ? pattern : null;
     }
 
-    boolean readOnly() {
+    public boolean readOnly() {
         return Boolean.TRUE.equals(merged.get("readOnly"));
+    }
+
+    public boolean writeOnly() {
+        return Boolean.TRUE.equals(merged.get("writeOnly"));
     }
 
     // --- Numeric constraints ---
 
-    Bound lower() {
+    public Bound lower() {
         return bound("minimum", "exclusiveMinimum", true);
     }
 
-    Bound upper() {
+    public Bound upper() {
         return bound("maximum", "exclusiveMaximum", false);
     }
 
@@ -216,7 +220,7 @@ final class Schema {
         return inclusive == null ? null : new Bound(inclusive, Boolean.TRUE.equals(exclusive));
     }
 
-    BigDecimal multipleOf() {
+    public BigDecimal multipleOf() {
         BigDecimal value = decimal("multipleOf");
         return value != null && value.signum() > 0 ? value : null;
     }
@@ -226,7 +230,7 @@ final class Schema {
     }
 
     /** A non-negative integer keyword (minLength, maxItems, ...), or {@code null}. */
-    Integer count(String keyword) {
+    public Integer count(String keyword) {
         if (merged.get(keyword) instanceof Number number) {
             BigDecimal value = JsonValues.decimal(number);
             if (value.signum() < 0) {
@@ -239,11 +243,11 @@ final class Schema {
 
     // --- Structure ---
 
-    Schema items() {
+    public Schema items() {
         return resolver.resolve(merged.get("items"), location + "/items");
     }
 
-    List<String> propertyNames() {
+    public List<String> propertyNames() {
         List<String> names = new ArrayList<>();
         if (merged.get("properties") instanceof Map<?, ?> properties) {
             properties.keySet().forEach(key -> names.add(String.valueOf(key)));
@@ -251,11 +255,11 @@ final class Schema {
         return names;
     }
 
-    boolean declaresProperty(String property) {
+    public boolean declaresProperty(String property) {
         return merged.get("properties") instanceof Map<?, ?> properties && properties.containsKey(property);
     }
 
-    Schema property(String property) {
+    public Schema property(String property) {
         Object node = merged.get("properties") instanceof Map<?, ?> properties ? properties.get(property) : null;
         if (node == null && merged.get("additionalProperties") instanceof Map<?, ?> additional) {
             return resolver.resolve(additional, location + "/additionalProperties");
@@ -263,7 +267,7 @@ final class Schema {
         return resolver.resolve(node, location + "/properties/" + Pointers.escape(property));
     }
 
-    List<String> required() {
+    public List<String> required() {
         List<String> required = new ArrayList<>();
         if (merged.get("required") instanceof List<?> list) {
             list.forEach(entry -> required.add(String.valueOf(entry)));
@@ -272,26 +276,26 @@ final class Schema {
     }
 
     /** {@code false} when additionalProperties is {@code false}. */
-    boolean allowsAdditionalProperties() {
+    public boolean allowsAdditionalProperties() {
         return !Boolean.FALSE.equals(merged.get("additionalProperties"));
     }
 
-    List<?> oneOf() {
+    public List<?> oneOf() {
         return merged.get("oneOf") instanceof List<?> list ? list : List.of();
     }
 
-    List<?> anyOf() {
+    public List<?> anyOf() {
         return merged.get("anyOf") instanceof List<?> list ? list : List.of();
     }
 
     /** discriminator.propertyName, or {@code null}. */
-    String discriminatorProperty() {
+    public String discriminatorProperty() {
         return merged.get("discriminator") instanceof Map<?, ?> discriminator
                 && discriminator.get("propertyName") instanceof String property ? property : null;
     }
 
     /** The discriminator value that selects the component {@code componentName}. */
-    String discriminatorValue(String componentName) {
+    public String discriminatorValue(String componentName) {
         if (merged.get("discriminator") instanceof Map<?, ?> discriminator
                 && discriminator.get("mapping") instanceof Map<?, ?> mapping) {
             for (Map.Entry<?, ?> entry : mapping.entrySet()) {

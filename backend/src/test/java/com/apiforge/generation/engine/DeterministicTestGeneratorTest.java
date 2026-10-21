@@ -13,6 +13,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import com.apiforge.schema.MediaTypes;
+import com.apiforge.schema.Schema;
+import com.apiforge.schema.SchemaResolver;
+import com.apiforge.schema.SchemaValidator;
+import com.apiforge.schema.Schemas;
 import com.apiforge.generation.engine.DeterministicTestGenerator.Operation;
 import com.apiforge.generation.engine.DeterministicTestGenerator.Output;
 import com.apiforge.generation.engine.DeterministicTestGenerator.Skipped;
@@ -249,7 +254,12 @@ class DeterministicTestGeneratorTest {
 
         @Test
         void undocumentedAuthenticationFailureFallsBackToHttpSemantics() {
-            var expectations = test(WAREHOUSE.generate("POST /orders"), "auth.none").expectations();
+            var expectations = test(GenerationFixtures.document("""
+                    {"openapi":"3.0.3","info":{"title":"Keys","version":"1"},
+                     "security":[{"key":[]}],
+                     "paths":{"/orders":{"post":{"responses":{"201":{"description":"Created"}}}}},
+                     "components":{"securitySchemes":{"key":{"type":"apiKey","in":"header","name":"X-API-Key"}}}}""")
+                    .generate("POST /orders"), "auth.none").expectations();
 
             assertThat(expectations.statuses()).containsExactly("401", "403");
             assertThat(expectations.summary()).contains("documents neither");
@@ -268,7 +278,10 @@ class DeterministicTestGeneratorTest {
             assertThat(error.responseChecks()).extracting(check -> check.status() + " " + check.schemaName())
                     .containsExactly("400 Error", "422 Error");
             assertThat(deleted.statuses()).containsExactly("204");
-            assertThat(deleted.validateResponseSchema()).isFalse();
+            // No documented body for 204, but whatever status comes back is still validated against its schema.
+            assertThat(deleted.responseChecks()).isEmpty();
+            assertThat(deleted.validateResponseSchema()).isTrue();
+            assertThat(error.validateResponseSchema()).isTrue();
         }
 
         @Test
