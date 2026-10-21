@@ -27,7 +27,7 @@ import tools.jackson.databind.json.JsonMapper;
  * generator exactly as they come back from the database (a JSON round trip, so numbers have the
  * types Jackson produces when reading jsonb).
  */
-final class GenerationFixtures {
+public final class GenerationFixtures {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final SpecificationAnalyzer ANALYZER = new SpecificationAnalyzer(new ApiForgeProperties(
@@ -35,9 +35,9 @@ final class GenerationFixtures {
             new ApiForgeProperties.Auth(true, 4, 5, Duration.ofMinutes(15), Duration.ofHours(12), 10, 5, false),
             new ApiForgeProperties.Specification(DataSize.ofMegabytes(5), 2000, 100, 50)));
 
-    record Imported(Specification specification, Map<String, Operation> operations) {
+    public record Imported(Specification specification, Map<String, Operation> operations) {
 
-        Operation operation(String key) {
+        public Operation operation(String key) {
             Operation operation = operations.get(key);
             if (operation == null) {
                 throw new IllegalArgumentException("No operation " + key + " in " + operations.keySet());
@@ -45,7 +45,7 @@ final class GenerationFixtures {
             return operation;
         }
 
-        Output generate(String key) {
+        public Output generate(String key) {
             return new DeterministicTestGenerator().generate(specification, operation(key));
         }
     }
@@ -53,7 +53,7 @@ final class GenerationFixtures {
     private GenerationFixtures() {
     }
 
-    static Imported fixture(String name) {
+    public static Imported fixture(String name) {
         try (InputStream stream = GenerationFixtures.class.getResourceAsStream("/specs/" + name)) {
             if (stream == null) {
                 throw new IllegalArgumentException("Missing fixture " + name);
@@ -65,7 +65,7 @@ final class GenerationFixtures {
     }
 
     /** A YAML or JSON document given inline. */
-    static Imported document(String content) {
+    public static Imported document(String content) {
         return imported(content.getBytes(StandardCharsets.UTF_8));
     }
 

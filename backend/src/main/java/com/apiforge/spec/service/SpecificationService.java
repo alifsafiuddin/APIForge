@@ -10,6 +10,7 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +49,7 @@ public class SpecificationService {
     public record SpecificationUpload(byte[] content, String sourceName) {
     }
 
+    private final ApplicationEventPublisher events;
     private final ProjectAccessService access;
     private final SpecificationVersionRepository versions;
     private final ApiOperationRepository operations;
@@ -59,8 +61,9 @@ public class SpecificationService {
 
     public SpecificationService(ProjectAccessService access, SpecificationVersionRepository versions,
             ApiOperationRepository operations, TestCaseRepository testCases, SpecificationAnalyzer analyzer,
-            AuditService audit, Clock clock, ApiForgeProperties properties) {
+            AuditService audit, Clock clock, ApiForgeProperties properties, ApplicationEventPublisher events) {
         this.access = access;
+        this.events = events;
         this.versions = versions;
         this.operations = operations;
         this.testCases = testCases;
@@ -193,6 +196,7 @@ public class SpecificationService {
         List<String> keysOrSentinel = keys.isEmpty() ? List.of("") : keys;
         testCases.markStaleExcept(project.getId(), keysOrSentinel);
         testCases.reactivate(project.getId(), keysOrSentinel);
+        events.publishEvent(new SpecificationActivated(project.getId(), version.getId()));
     }
 
     private SpecificationVersion requireVersion(UUID projectId, UUID versionId) {

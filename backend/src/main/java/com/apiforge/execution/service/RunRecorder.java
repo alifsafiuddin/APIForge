@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,8 +28,11 @@ public class RunRecorder {
     private final TestResultRepository results;
     private final AuditService audit;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
-    public RunRecorder(TestRunRepository runs, TestResultRepository results, AuditService audit, Clock clock) {
+    public RunRecorder(TestRunRepository runs, TestResultRepository results, AuditService audit, Clock clock,
+            ApplicationEventPublisher events) {
+        this.events = events;
         this.runs = runs;
         this.results = results;
         this.audit = audit;
@@ -58,6 +62,8 @@ public class RunRecorder {
         TestRun run = runs.findById(runId).orElseThrow();
         if (!run.getStatus().isFinished()) {
             run.finish(status, reason, Instant.now(clock));
+            events.publishEvent(new TestRunFinished(run.getProjectId(), run.getId(), run.getKind(),
+                    run.getSpecificationVersionId()));
         }
         return run;
     }

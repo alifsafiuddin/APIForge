@@ -5,6 +5,7 @@
 | `petstore3-openapi.yaml` | Swagger Petstore 3 (`swagger-api/swagger-petstore`, `src/main/resources/openapi.yaml`), copied unmodified on 2026-10-21 | Apache License 2.0 |
 | `warehouse-lab-openapi.yaml` | Written for this project (Phase 4) | Same as this repository |
 | `warehouse-lab-server.mjs` | Written for this project (Phase 5) | Same as this repository |
+| `coverage-lab-openapi.yaml` | Written for this project (Phase 7) | Same as this repository |
 
 Import it from a project's **Specification** page (upload the file or paste its contents). It declares 19 operations.
 Its servers point to `petstore3.swagger.io`, a third-party host: importing never contacts it, and you should not run tests
@@ -43,4 +44,28 @@ that protects nothing; override it with `WAREHOUSE_LAB_API_KEY`).
 
 The dev profile trusts exactly this host and port; nothing else on your machine or network is reachable from test
 runs.
+
+## Coverage Lab (Phase 7)
+
+`coverage-lab-openapi.yaml` (5 operations) is a small subset of the Warehouse Lab contract with known endpoints and
+scenarios, for checking the **Coverage** tab by hand. Run it against `warehouse-lab-server.mjs` (which does not implement
+`GET /reports`). Phase 7 was verified with exactly these steps and numbers:
+
+1. Import it and generate tests: **30** tests (health 1; GET, DELETE product 6 each: valid, no/invalid credentials, path
+   type, below and at minimum; PATCH 14: those 6 plus missing body, unsupported content type, body type, and stock type,
+   below/at minimum, above/at maximum; reports 3).
+2. Disable the 3 `GET /reports` tests, PATCH "Unsupported content type" and PATCH "stock at maximum 10000".
+3. Edit GET product "Request with invalid credentials" to send the valid request and expect 200 (a duplicate).
+4. Run all tests in a read-only environment (PATCH and DELETE are skipped), then run `DELETE /products/{productId}` in an
+   environment that allows destructive tests.
+
+| Metric | Expected | Why |
+|---|---|---|
+| Operations with tests | 4 of 5 | `GET /reports` has only disabled tests |
+| Enabled tests (distinct) | 24 | 30 − 5 disabled = 25, the copy counts once |
+| Documented responses targeted | 12 of 14 | all but the two of `/reports` |
+| Request constraints covered | 15 of 17 | GET 3/3, PATCH 9/11, DELETE 3/3 |
+| Negative scenario kinds present | 10 of 12 | missing: content type (PATCH), credentials (`/reports`) |
+| Tests executed / passed | 12 of 24 / 12 of 12 | health 1 + GET 5 + DELETE 6; PATCH only skipped (12) |
+| Documented responses exercised | 7 of 14 | health 200; GET 200, 401, 404; DELETE 204, 401, 404 |
 

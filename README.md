@@ -2,12 +2,13 @@
 
 A full-stack developer tool for **contract-driven API testing**. You import an OpenAPI 3.x specification, explore its endpoints, and generate deterministic test scenarios from its schemas. APIForge AI then runs them against an API you are authorized to test, validates every response against the documented contract, tracks specification coverage, and can ask a **locally hosted** LLM (Ollama) to explain failures.
 
-> **Status: Phase 6 (response contract validation and reporting) complete.**
+> **Status: Phase 7 (coverage and missing-scenario analysis) complete.**
 > What runs today:
 > - Registration and sign-in (sessions, CSRF, lockout, rate limiting, audit trail) and private API projects.
 > - **OpenAPI 3.0/3.1 import** with immutable versions and a **specification explorer**.
 > - **Deterministic test generation** with a review and curation workspace.
 > - **Environments**: base URL, timeouts, redirects, execution policy, authentication (bearer, basic, API key), default headers, variables; secret variables are AES-256-GCM encrypted and write-only.
+> - **Specification coverage**: operations with and without tests, documented responses targeted and exercised, request constraints, schema branches and negative scenario kinds covered — each metric defined on the page, endpoint coverage kept apart from the pass rate, duplicated tests counted once. Gaps (untested endpoints, unexercised responses, missing negative scenarios), filters, per-operation drill-down, and changes between specification versions. This is specification coverage, never code coverage.
 > - **Contract validation and reporting**: every response is checked against the active specification — documented status, media type, JSON syntax and the response schema (types, required fields, nested objects, arrays, enums, constraints, formats) — with a JSON path, expected and actual value per finding. Skipped and inconclusive checks are shown as such, never as passes. Runs can be filtered by outcome, results show assertions, the response body with findings marked, and timing, and a run can be compared with an earlier one.
 > - **Secure execution**: test runs (asynchronous, cancellable, per-user limits) and a console for single requests, against an API you are authorized to test. Private, loopback, link-local, multicast and cloud metadata destinations are blocked, DNS is validated before connecting (rebinding-safe), every redirect is re-checked, and secrets are redacted from everything that is stored, returned or logged.
 >
@@ -68,6 +69,8 @@ To execute tests: start the local sample API with `node samples/warehouse-lab-se
 
 To see contract validation: open a run under **Runs**. Filter it by outcome, open a result to see each assertion with expected and actual values, the response body with failing JSON paths marked, and the timing, or choose **Compare with previous run**. Restart the sample with `WAREHOUSE_LAB_VIOLATIONS=1` and run again to see status, media-type and schema violations reported ([samples/README.md](samples/README.md) lists them).
 
+To see coverage: open the project's **Coverage** tab. [samples/README.md](samples/README.md) describes a small specification (`coverage-lab-openapi.yaml`) with the numbers you should see after a few documented steps.
+
 The Vite dev server proxies `/api` and `/actuator` to the backend, so the browser only talks to one origin and the session cookie stays first-party.
 
 ## Commands
@@ -106,6 +109,7 @@ All `/api/v1/**` endpoints require a signed-in session unless marked public. Sta
 | `POST /api/v1/projects/{id}/executions` | Send one request now (console) |
 | `GET /api/v1/projects/{id}/runs[/{runId}[/results[/{resultId}]]]` | Run history and results (redacted request and response, contract assertions); `?outcome=` filters results |
 | `GET /api/v1/projects/{id}/runs/{runId}/comparison[?baseline=]` | Outcome changes against the previous (or a chosen) run |
+| `GET /api/v1/projects/{id}/coverage[?environmentId=]`, `…/coverage/operation?key=`, `…/coverage/changes` | Specification coverage, one operation's coverage, changes between versions |
 
 Every response carries an `X-Request-Id` header. Errors use `application/problem+json` with a stable `code`.
 

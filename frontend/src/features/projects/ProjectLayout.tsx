@@ -15,6 +15,7 @@ const SECTIONS = [
   { to: 'tests', label: 'Tests' },
   { to: 'environments', label: 'Environments' },
   { to: 'runs', label: 'Runs' },
+  { to: 'coverage', label: 'Coverage' },
   { to: 'console', label: 'Console' },
 ]
 

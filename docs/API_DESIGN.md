@@ -190,14 +190,17 @@ The brief moved deterministic generation ahead of execution, so this section is 
 
 Tests are not hard-deleted through the API: disable a test to stop it from running; regeneration archives generated tests whose scenario no longer applies.
 
-### 2.8 Coverage and dashboard — Phase 6
+### 2.8 Coverage ✅ Phase 7
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/projects/{projectId}/coverage` | `?specVersionId=&environmentId=&since=`. Returns metrics (each with numerator, denominator and definition), untested operations, untested documented responses, operations missing negative tests, and per-operation breakdown |
-| GET | `/dashboard` | Cross-project summary for the current user: project count, recent runs, 14-day outcome trend, lowest-coverage projects |
+| GET | `/projects/{projectId}/coverage?environmentId=` | Coverage of the active version: `version`, `metrics` (`{id, group: TEST_DESIGN\|EXECUTION, label, value, total?, definition}`), `outcomes` of distinct enabled tests (`tests, executed, passed, failed, error, inconclusive, skipped, notRun`), one row per operation (tests, duplicates, inactive tests, responses targeted/exercised, constraints, branches, missing negative kinds, undocumented statuses received, outcomes) and `gaps` (`operationsWithoutTests`, `responsesNotExercised[{operationKey, status, targeted}]`, `missingNegatives[{kind, label, operations}]`). `environmentId` limits execution metrics to runs in that environment. No active version → 409 `NO_ACTIVE_SPECIFICATION` |
+| GET | `/projects/{projectId}/coverage/operation?key=&environmentId=` | Drill-down of one operation (`key` = `METHOD /path`): responses with received statuses, negative kinds (`PRESENT`, `MISSING`, `NOT_APPLICABLE`), planned scenarios with covered state and test ids, scenarios the generator skips with the reason, schema branches, enabled tests with `duplicateOf` and latest outcome. Unknown key → 404 |
+| GET | `/projects/{projectId}/coverage/changes?from=` | Changes from `from` (default: the version numbered just below the active one) to the active version: operations `ADDED`/`REMOVED`/`CHANGED` with aspects, tests, tests generated from an earlier version and stale tests; `unchanged` count; `baseline` (latest snapshot of `from`) and `current` summary numbers; `history` (latest 50 snapshots) |
 
-### 2.9 AI — Phase 7
+Metric definitions are part of the response and are documented in ADR-028. A cross-project dashboard endpoint was planned here and is not implemented.
+
+### 2.9 AI — later phase
 
 | Method | Path | Description |
 |---|---|---|

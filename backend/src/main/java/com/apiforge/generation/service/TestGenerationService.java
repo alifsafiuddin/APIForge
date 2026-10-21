@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -79,12 +80,14 @@ public class TestGenerationService {
     private final TestCaseRepository testCases;
     private final TestSuiteRepository suites;
     private final AuditService audit;
+    private final ApplicationEventPublisher events;
     private final DeterministicTestGenerator generator = new DeterministicTestGenerator();
 
     public TestGenerationService(ProjectAccessService access, SpecificationVersionRepository versions,
             ApiOperationRepository operations, TestCaseRepository testCases, TestSuiteRepository suites,
-            AuditService audit) {
+            AuditService audit, ApplicationEventPublisher events) {
         this.access = access;
+        this.events = events;
         this.versions = versions;
         this.operations = operations;
         this.testCases = testCases;
@@ -161,6 +164,7 @@ public class TestGenerationService {
         details.put("updated", updated);
         details.put("archived", archived);
         audit.record(AuditEventType.TESTS_GENERATED, userId, null, projectId, details);
+        events.publishEvent(new TestsGenerated(projectId, version.getId()));
         return new GenerationReport(version.getId(), version.getVersionNumber(), selected.size(), created, updated,
                 unchanged, keptUserEdits, archived, total, DeterministicTestGenerator.VERSION, skipped);
     }

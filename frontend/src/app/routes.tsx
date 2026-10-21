@@ -11,6 +11,7 @@ import { SpecificationPage } from '@/features/specs/SpecificationPage'
 import { SpecOverview } from '@/features/specs/SpecOverview'
 import { TestsPage } from '@/features/tests/TestsPage'
 import { EnvironmentsPage } from '@/features/environments/EnvironmentsPage'
+import { CoveragePage } from '@/features/coverage/CoveragePage'
 import { ConsolePage } from '@/features/runs/ConsolePage'
 import { RunComparisonPage } from '@/features/runs/RunComparisonPage'
 import { RunDetailPage } from '@/features/runs/RunDetailPage'
@@ -65,6 +66,7 @@ export const routes: RouteObject[] = [
               { path: 'runs/:runId', element: <RunDetailPage /> },
               { path: 'runs/:runId/compare', element: <RunComparisonPage /> },
               { path: 'console', element: <ConsolePage /> },
+              { path: 'coverage', element: <CoveragePage /> },
             ],
           },
           { path: '*', element: <NotFoundPage /> },

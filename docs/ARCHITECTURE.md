@@ -71,7 +71,7 @@ flowchart TB
     outbound[outbound<br/>SSRF guard, HTTP client, limits]
     validation[validation<br/>contract validation]
     schema[schema<br/>shared JSON Schema validator]
-    coverage[coverage<br/>metrics]
+    coverage[coverage<br/>specification coverage,<br/>gaps, snapshots]
     ai[ai<br/>Spring AI gateway, prompts,<br/>output validation, fallback]
     dashboard[dashboard<br/>read models]
     common[common<br/>errors, paging, clock, ids]
@@ -85,7 +85,7 @@ flowchart TB
     gen --> spec & testcase & schema
     exec --> env & testcase & outbound & validation & secrets
     validation --> schema
-    coverage --> spec & testcase & exec
+    coverage --> spec & testcase & exec & gen & schema & env
     ai --> spec & testcase & exec & secrets
     dashboard --> project & exec & coverage
 ```
@@ -232,7 +232,7 @@ React SPA (Vite, TypeScript 6.0, Tailwind CSS 4, shadcn/ui on Radix primitives, 
 | `/projects/:projectId/runs/:runId` | Run results ✅ | Live progress, cancel, per-test outcomes; result panel with checks, redacted request and response, correlation id. Later: contract validation findings |
 | `/projects/:projectId/console` | Console ✅ | One request through the same guarded engine (method, path, query, headers, body, auth mode, expected statuses) |
 | `/projects/:projectId/executions/:executionId` | Execution detail + AI failure assistant | Request/response (redacted), findings, explain panel |
-| `/projects/:projectId/coverage` | Coverage report | Metrics with definitions, untested endpoints/responses, missing negatives |
+| `/projects/:projectId/coverage` | Coverage report | ✅ Metrics with definitions (test design and execution separate), gaps, operation table with filters and drill-down, version changes and history |
 | `/projects/:projectId/environments` | Environment configuration ✅ | Base URL, timeout, redirects, execution policy (confirmation above read-only), auth, default headers, variables (secrets write-only); authorization notice on first creation |
 | `/settings` | Settings | Profile, password, AI status/model info |
 

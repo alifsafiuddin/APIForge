@@ -225,8 +225,9 @@ erDiagram
 | `V8__deterministic_test_generation.sql` | `test_cases` gains `scenario_key`, `spec_location`, `enabled`, `user_modified`, `sort_order`; categories `STRING_LENGTH`, `ARRAY_LENGTH`, `CONTENT_TYPE` added and the unused `REQUIRED_FIELD` removed; one GENERATED suite per project; audit type `TESTS_GENERATED` |
 | `V9__execution_engine.sql` | `environments.default_headers`; `test_runs.kind` (`TEST_RUN`, `AD_HOC`) and `status_reason`; `test_results.correlation_id`; error kind `CANCELLED`; audit types `ENVIRONMENT_CHANGED`, `SECRET_CHANGED`, `RUN_STARTED`, `RUN_CANCELLED`, `OUTBOUND_BLOCKED` |
 | `V10__result_reporting.sql` | Index `ix_test_results_run_outcome (test_run_id, outcome, executed_at)` for outcome filters; `test_results.time_to_headers_ms` with `ck_test_results_time_to_headers` (≥ 0 and ≤ `duration_ms`) |
+| `V11__coverage_snapshots.sql` | `coverage_snapshots` (summary numbers per project and version after generation, test runs and activation; trigger and run checked; immutable except the run reference, which becomes NULL when the run is deleted); `uq_test_runs_id_project` for the composite run reference |
 
-Applied migrations are never edited; corrections are new migrations. Verified on an empty database (Testcontainers) and incrementally on the development database (V1 → V6 in Phase 2, V6 → V7 in Phase 3, V7 → V8 in Phase 4, V8 → V9 in Phase 5, V9 → V10 in Phase 6).
+Applied migrations are never edited; corrections are new migrations. Verified on an empty database (Testcontainers) and incrementally on the development database (V1 → V6 in Phase 2, V6 → V7 in Phase 3, V7 → V8 in Phase 4, V8 → V9 in Phase 5, V9 → V10 in Phase 6, V10 → V11 in Phase 7).
 
 ## 3. Integrity rules enforced by the database
 
@@ -263,7 +264,7 @@ Beyond primary keys and the unique constraints above: `api_projects(owner_id, up
 
 ## 6. Notable decisions
 
-- **Coverage snapshots are not stored** (the brief made them optional). Coverage is computed from `test_cases` and `test_results`, which already persist (ADR-013); a snapshot table can be added if it becomes slow.
+- **Coverage is computed, snapshots are history.** Live coverage is computed from `test_cases`, `test_results` and `api_operations` (ADR-013). Since Phase 7, `coverage_snapshots` keeps the summary numbers over time so coverage can be compared across specification versions (ADR-028); nothing reads them to compute current coverage.
 - **Audit events are stored** for security-relevant actions: `USER_REGISTERED`, `LOGIN_SUCCEEDED`, `LOGIN_FAILED`, `ACCOUNT_LOCKED`, `LOGOUT`, `PROJECT_CREATED`, `PROJECT_DELETED`, `CROSS_USER_ACCESS_DENIED`, `SPECIFICATION_IMPORTED`, `SPECIFICATION_ACTIVATED`, `TESTS_GENERATED`, `ENVIRONMENT_CHANGED`, `SECRET_CHANGED` (variable name only), `RUN_STARTED`, `RUN_CANCELLED`, `OUTBOUND_BLOCKED`. `subject` holds the e-mail used in a failed sign-in (so attacks on unknown accounts are visible); logs only ever contain user ids.
 - **Entities reference each other by id** (no JPA associations). Every lookup goes through an owner- or project-scoped repository method, which keeps authorization explicit and avoids lazy-loading surprises with `open-in-view=false`.
 - `test_runs` has no `version` column: runs are written by a single executor; results are append-only.

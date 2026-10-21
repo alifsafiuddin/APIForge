@@ -21,6 +21,8 @@ public interface TestCaseRepository extends JpaRepository<TestCase, UUID>, JpaSp
 
     List<TestCase> findByProjectIdAndIdIn(UUID projectId, Collection<UUID> ids);
 
+    List<TestCase> findByProjectIdAndLifecycleStatus(UUID projectId, TestCase.LifecycleStatus lifecycleStatus);
+
     /** Tests that may run: enabled, approved and active, in workspace order. */
     @Query("""
             select t from TestCase t
