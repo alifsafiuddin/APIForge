@@ -1,6 +1,14 @@
 # Test profile (activated by @IntegrationTest). The database comes from Testcontainers.
 
 apiforge:
+  ai:
+    # A fake Ollama on loopback (support/FakeOllama); individual tests decide how it answers.
+    base-url: http://127.0.0.1:18092
+    model: test-model:1b
+    request-timeout: 3s
+    status-timeout: 2s
+    queue-wait: 200ms
+    requests-per-minute-per-user: 120
   secrets:
     key: dGVzdC1vbmx5LWtleS0zMi1ieXRlcy1sb25nLWtleSE=
   outbound:

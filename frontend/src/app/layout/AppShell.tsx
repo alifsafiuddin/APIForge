@@ -5,6 +5,7 @@ import { Link, Outlet } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { UserMenu } from '@/features/auth/UserMenu'
+import { AiStatusBadge } from '@/features/ai/AiStatusBadge'
 import { useBackendHealth, useSystemInfo } from '@/features/system/api'
 import { HealthBadge } from '@/features/system/HealthBadge'
 
@@ -92,6 +93,7 @@ export function AppShell() {
             <Brand />
           </div>
           <div className="ml-auto flex items-center gap-3">
+            <AiStatusBadge />
             <BackendStatus />
             <UserMenu />
           </div>

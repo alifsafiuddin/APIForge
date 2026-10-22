@@ -72,7 +72,7 @@ flowchart TB
     validation[validation<br/>contract validation]
     schema[schema<br/>shared JSON Schema validator]
     coverage[coverage<br/>specification coverage,<br/>gaps, snapshots]
-    ai[ai<br/>Spring AI gateway, prompts,<br/>output validation, fallback]
+    ai[ai<br/>Ollama gateway (Spring AI), prompts,<br/>sanitizing, output validation]
     dashboard[dashboard<br/>read models]
     common[common<br/>errors, paging, clock, ids]
 
@@ -86,7 +86,7 @@ flowchart TB
     exec --> env & testcase & outbound & validation & secrets
     validation --> schema
     coverage --> spec & testcase & exec & gen & schema & env
-    ai --> spec & testcase & exec & secrets
+    ai --> spec & testcase & exec & gen & schema & audit
     dashboard --> project & exec & coverage
 ```
 

@@ -13,6 +13,7 @@ import { useProject } from '@/features/projects/api'
 import { type OperationSummary, useOperations } from '@/features/specs/api'
 import { MethodBadge, StatusBadge } from '@/features/specs/components/MethodBadge'
 import { matchesQuery } from '@/features/specs/operation-filter'
+import { AiSuggestionsPanel } from '@/features/ai/AiSuggestionsPanel'
 import { RunTestsDialog } from '@/features/runs/RunTestsDialog'
 import { cn } from '@/lib/utils'
 
@@ -347,6 +348,7 @@ function OperationTests({
           Run
         </Button>
       </div>
+      <AiSuggestionsPanel key={operationKey} projectId={projectId} operationKey={operationKey} onOpen={onOpen} />
       {running ? (
         <RunTestsDialog
           projectId={projectId}

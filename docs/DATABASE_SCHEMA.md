@@ -226,8 +226,9 @@ erDiagram
 | `V9__execution_engine.sql` | `environments.default_headers`; `test_runs.kind` (`TEST_RUN`, `AD_HOC`) and `status_reason`; `test_results.correlation_id`; error kind `CANCELLED`; audit types `ENVIRONMENT_CHANGED`, `SECRET_CHANGED`, `RUN_STARTED`, `RUN_CANCELLED`, `OUTBOUND_BLOCKED` |
 | `V10__result_reporting.sql` | Index `ix_test_results_run_outcome (test_run_id, outcome, executed_at)` for outcome filters; `test_results.time_to_headers_ms` with `ck_test_results_time_to_headers` (≥ 0 and ≤ `duration_ms`) |
 | `V11__coverage_snapshots.sql` | `coverage_snapshots` (summary numbers per project and version after generation, test runs and activation; trigger and run checked; immutable except the run reference, which becomes NULL when the run is deleted); `uq_test_runs_id_project` for the composite run reference |
+| `V12__ai_assistance.sql` | `test_cases.ai_model` (only for `AI_SUGGESTED`); `ai_explanations` (validated model answers per result, never prompts; cascades with the result and project); audit types `AI_SUGGESTIONS_REQUESTED`, `AI_EXPLANATION_REQUESTED` |
 
-Applied migrations are never edited; corrections are new migrations. Verified on an empty database (Testcontainers) and incrementally on the development database (V1 → V6 in Phase 2, V6 → V7 in Phase 3, V7 → V8 in Phase 4, V8 → V9 in Phase 5, V9 → V10 in Phase 6, V10 → V11 in Phase 7).
+Applied migrations are never edited; corrections are new migrations. Verified on an empty database (Testcontainers) and incrementally on the development database (V1 → V6 in Phase 2, V6 → V7 in Phase 3, V7 → V8 in Phase 4, V8 → V9 in Phase 5, V9 → V10 in Phase 6, V10 → V11 in Phase 7, V11 → V12 in Phase 8).
 
 ## 3. Integrity rules enforced by the database
 

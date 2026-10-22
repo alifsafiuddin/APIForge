@@ -64,6 +64,15 @@ class SchemaValidatorTest {
         }
 
         @Test
+        void nullAgainstSchemasWithoutTypeIsValidInsteadOfFailing() {
+            // Found by the AI evaluation: a pattern switch on null threw before this case existed.
+            assertThat(validate("null", "{}").valid()).isTrue();
+            assertThat(validate("{\"value\":null}", "{\"properties\":{\"value\":{}}}").valid()).isTrue();
+            assertThat(validator.validate(value("{\"a\":null}"), schema("{\"properties\":{\"a\":{\"minimum\":1}}}"),
+                    SchemaValidator.Direction.RESPONSE).valid()).isTrue();
+        }
+
+        @Test
         void nullableWithoutTypeDoesNotRestrict() {
             assertThat(validate("5", "{\"nullable\":true}").valid()).isTrue();
         }

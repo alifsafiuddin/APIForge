@@ -118,6 +118,10 @@ public class TestCase extends AuditableEntity {
     @Column(name = "generator_version", length = 20)
     private String generatorVersion;
 
+    /** The model that suggested this test ({@link Origin#AI_SUGGESTED} only). */
+    @Column(name = "ai_model", length = 200)
+    private String aiModel;
+
     @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "dedupe_hash", nullable = false, length = 64)
     private String dedupeHash;
@@ -172,6 +176,26 @@ public class TestCase extends AuditableEntity {
                 definition.category(), Origin.DETERMINISTIC, definition.riskLevel(), definition.request().toMap(),
                 definition.expectations().toMap(), definition.dedupeHash());
         test.apply(definition, sourceVersionId);
+        return test;
+    }
+
+    /**
+     * A test suggested by a model: data only (a request template and expectations), stored pending
+     * review, so it cannot run until a person approves it.
+     *
+     * @param promptVersion version of the prompt that produced it (stored as the generator version)
+     */
+    public static TestCase suggested(UUID projectId, UUID suiteId, UUID sourceVersionId, String operationKey,
+            String name, Category category, RequestTemplate request, Expectations expectations, String rationale,
+            String model, String promptVersion, String dedupeHash, int sortOrder) {
+        TestCase test = new TestCase(projectId, suiteId, operationKey, name, category, Origin.AI_SUGGESTED,
+                RiskLevel.forMethod(operationKey.substring(0, operationKey.indexOf(' '))), request.toMap(),
+                expectations.toMap(), dedupeHash);
+        test.rationale = rationale;
+        test.aiModel = model;
+        test.generatorVersion = promptVersion;
+        test.sourceSpecificationVersionId = sourceVersionId;
+        test.sortOrder = sortOrder;
         return test;
     }
 
@@ -328,6 +352,10 @@ public class TestCase extends AuditableEntity {
 
     public String getGeneratorVersion() {
         return generatorVersion;
+    }
+
+    public String getAiModel() {
+        return aiModel;
     }
 
     public String getDedupeHash() {

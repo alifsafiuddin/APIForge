@@ -2,17 +2,18 @@
 
 A full-stack developer tool for **contract-driven API testing**. You import an OpenAPI 3.x specification, explore its endpoints, and generate deterministic test scenarios from its schemas. APIForge AI then runs them against an API you are authorized to test, validates every response against the documented contract, tracks specification coverage, and can ask a **locally hosted** LLM (Ollama) to explain failures.
 
-> **Status: Phase 7 (coverage and missing-scenario analysis) complete.**
+> **Status: Phase 8 (local AI with Ollama) complete.**
 > What runs today:
 > - Registration and sign-in (sessions, CSRF, lockout, rate limiting, audit trail) and private API projects.
 > - **OpenAPI 3.0/3.1 import** with immutable versions and a **specification explorer**.
 > - **Deterministic test generation** with a review and curation workspace.
 > - **Environments**: base URL, timeouts, redirects, execution policy, authentication (bearer, basic, API key), default headers, variables; secret variables are AES-256-GCM encrypted and write-only.
+> - **Local AI (optional)** through Ollama: test suggestions for an endpoint, reviewed before they can run, and "Explain failure" for failed results with observed facts checked against the data and hypotheses kept apart. Model and status are shown in the header; without Ollama everything else works. Setup and model choice: [docs/AI.md](docs/AI.md); measured quality: [docs/AI_EVALUATION.md](docs/AI_EVALUATION.md).
 > - **Specification coverage**: operations with and without tests, documented responses targeted and exercised, request constraints, schema branches and negative scenario kinds covered — each metric defined on the page, endpoint coverage kept apart from the pass rate, duplicated tests counted once. Gaps (untested endpoints, unexercised responses, missing negative scenarios), filters, per-operation drill-down, and changes between specification versions. This is specification coverage, never code coverage.
 > - **Contract validation and reporting**: every response is checked against the active specification — documented status, media type, JSON syntax and the response schema (types, required fields, nested objects, arrays, enums, constraints, formats) — with a JSON path, expected and actual value per finding. Skipped and inconclusive checks are shown as such, never as passes. Runs can be filtered by outcome, results show assertions, the response body with findings marked, and timing, and a run can be compared with an earlier one.
 > - **Secure execution**: test runs (asynchronous, cancellable, per-user limits) and a console for single requests, against an API you are authorized to test. Private, loopback, link-local, multicast and cloud metadata destinations are blocked, DNS is validated before connecting (rebinding-safe), every redirect is re-checked, and secrets are redacted from everything that is stored, returned or logged.
 >
-> Contract validation of response bodies, coverage and AI are **not implemented yet**. See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
+> Not yet: Docker images for the whole stack and end-to-end tests in CI. See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
 ## Quick start
 
@@ -110,6 +111,7 @@ All `/api/v1/**` endpoints require a signed-in session unless marked public. Sta
 | `GET /api/v1/projects/{id}/runs[/{runId}[/results[/{resultId}]]]` | Run history and results (redacted request and response, contract assertions); `?outcome=` filters results |
 | `GET /api/v1/projects/{id}/runs/{runId}/comparison[?baseline=]` | Outcome changes against the previous (or a chosen) run |
 | `GET /api/v1/projects/{id}/coverage[?environmentId=]`, `…/coverage/operation?key=`, `…/coverage/changes` | Specification coverage, one operation's coverage, changes between versions |
+| `GET /api/v1/ai/status`, `POST /api/v1/projects/{id}/ai/suggestions`, `POST …/runs/{runId}/results/{resultId}/explanation` | Local AI: availability, test suggestions (pending review), failure explanation |
 
 Every response carries an `X-Request-Id` header. Errors use `application/problem+json` with a stable `code`.
 
@@ -129,6 +131,7 @@ Every response carries an `X-Request-Id` header. Errors use `application/problem
 | `APIFORGE_SECRETS_KEY` | dev-only key in `dev`; *(required)* otherwise | Base64 of 32 random bytes; encrypts secret variables (AES-256-GCM). The public dev key is refused by `prod` |
 | `APIFORGE_OUTBOUND_CONNECT_TIMEOUT` / `APIFORGE_OUTBOUND_TOTAL_DEADLINE` | `5s` / `30s` | Connect timeout and whole-request deadline for test execution (bounded: 30 s / 3 min) |
 | `APIFORGE_OUTBOUND_ALLOW_TRUSTED_IN_PROD` | `false` | Acknowledgement needed to use trusted local targets with the `prod` profile |
+| `APIFORGE_AI_ENABLED` / `OLLAMA_BASE_URL` / `APIFORGE_AI_MODEL` | `true` / `http://localhost:11434` / `qwen2.5:7b` | Local AI (optional); see [docs/AI.md](docs/AI.md) for these and the timeout/concurrency settings |
 | `APIFORGE_BACKEND_URL` (frontend) | `http://localhost:8081` | Where the Vite dev server proxies API calls |
 | `VITE_API_BASE_URL` (frontend) | empty | Set only to call the backend cross-origin instead of through the proxy |
 
@@ -163,6 +166,8 @@ docs/        Architecture, schema, API design, security, testing, deployment, de
 | [DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) | ER diagram, tables, constraints, migration plan |
 | [API_DESIGN.md](docs/API_DESIGN.md) | REST conventions, error format, endpoint inventory |
 | [SECURITY.md](docs/SECURITY.md) | Threat model, SSRF controls, secrets, AI safety |
+| [AI.md](docs/AI.md) | Installing Ollama, choosing a model for your hardware, configuration, what the model sees |
+| [AI_EVALUATION.md](docs/AI_EVALUATION.md) | Measured quality and latency of the AI features |
 | [TESTING.md](docs/TESTING.md) | Test strategy and CI gates |
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Prerequisites, Compose topology, configuration, CI/CD |
 | [DECISIONS.md](docs/DECISIONS.md) | ADRs and the verified dependency compatibility matrix |
@@ -170,4 +175,4 @@ docs/        Architecture, schema, API design, security, testing, deployment, de
 
 ## Responsible use
 
-APIForge AI will send real HTTP requests once execution features land. Only point it at systems you own or are explicitly authorized to test.
+APIForge AI sends real HTTP requests to the environments you configure. Only point it at systems you own or are explicitly authorized to test.

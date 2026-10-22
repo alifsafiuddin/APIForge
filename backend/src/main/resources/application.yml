@@ -92,6 +92,18 @@ management:
       enabled: true
 
 apiforge:
+  # Local AI through Ollama (ADR-029). Optional: without Ollama every other feature works.
+  ai:
+    enabled: ${APIFORGE_AI_ENABLED:true}
+    base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+    model: ${APIFORGE_AI_MODEL:qwen2.5:7b}
+    request-timeout: ${APIFORGE_AI_REQUEST_TIMEOUT:120s}
+    max-attempts: 2
+    max-concurrent-requests: ${APIFORGE_AI_MAX_CONCURRENT:1}
+    requests-per-minute-per-user: 10
+    max-prompt-chars: 24000
+    context-tokens: ${APIFORGE_AI_CONTEXT_TOKENS:8192}
+    max-output-tokens: 1500
   cors:
     allowed-origins: ${APIFORGE_CORS_ALLOWED_ORIGINS:}
   auth:

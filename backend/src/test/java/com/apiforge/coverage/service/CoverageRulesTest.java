@@ -17,6 +17,7 @@ import com.apiforge.generation.engine.GenerationFixtures;
 import com.apiforge.schema.Schema;
 import com.apiforge.schema.Schemas;
 import com.apiforge.testcase.domain.TestCase;
+import com.apiforge.testcase.domain.TestFingerprint;
 
 class CoverageRulesTest {
 
@@ -200,14 +201,22 @@ class CoverageRulesTest {
             Map<String, Object> reordered = Schemas.object("""
                     {"auth":"ENVIRONMENT","body":{"value":{"y":2,"x":1},"mode":"JSON"},"headers":{},"query":{"b":[1,2],"a":1},"pathParams":{"id":1}}""");
 
-            String fingerprint = CoverageService.fingerprint("GET /x", request, List.of("200", "4xx"));
+            String fingerprint = TestFingerprint.of("GET /x", request, List.of("200", "4xx"));
 
-            assertThat(CoverageService.fingerprint("GET /x", reordered, List.of("4XX", "200"))).isEqualTo(fingerprint);
-            assertThat(CoverageService.fingerprint("GET /x", request, List.of("200"))).isNotEqualTo(fingerprint);
-            assertThat(CoverageService.fingerprint("GET /y", request, List.of("200", "4XX"))).isNotEqualTo(fingerprint);
+            assertThat(TestFingerprint.of("GET /x", reordered, List.of("4XX", "200"))).isEqualTo(fingerprint);
+            assertThat(TestFingerprint.of("GET /x", request, List.of("200"))).isNotEqualTo(fingerprint);
+            assertThat(TestFingerprint.of("GET /y", request, List.of("200", "4XX"))).isNotEqualTo(fingerprint);
             Map<String, Object> otherOrder = Schemas.object("""
                     {"pathParams":{"id":1},"query":{"a":1,"b":[2,1]},"headers":{},"body":{"mode":"JSON","value":{"x":1,"y":2}},"auth":"ENVIRONMENT"}""");
-            assertThat(CoverageService.fingerprint("GET /x", otherOrder, List.of("200", "4XX"))).as("array order matters")
+            assertThat(TestFingerprint.of("GET /x", otherOrder, List.of("200", "4XX"))).as("array order matters")
+                    .isNotEqualTo(fingerprint);
+            Map<String, Object> asText = Schemas.object("""
+                    {"pathParams":{"id":"1"},"query":{"a":"1","b":["1","2"]},"headers":{},"body":{"mode":"JSON","value":{"x":1,"y":2}},"auth":"ENVIRONMENT"}""");
+            assertThat(TestFingerprint.of("GET /x", asText, List.of("200", "4XX"))).as("path and query values travel as text")
+                    .isEqualTo(fingerprint);
+            Map<String, Object> bodyAsText = Schemas.object("""
+                    {"pathParams":{"id":1},"query":{"a":1,"b":[1,2]},"headers":{},"body":{"mode":"JSON","value":{"x":"1","y":2}},"auth":"ENVIRONMENT"}""");
+            assertThat(TestFingerprint.of("GET /x", bodyAsText, List.of("200", "4XX"))).as("JSON body types matter")
                     .isNotEqualTo(fingerprint);
         }
     }

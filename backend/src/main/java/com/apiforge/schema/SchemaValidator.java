@@ -143,7 +143,7 @@ public final class SchemaValidator {
             case String text -> checkString(text, own, pointer, context);
             case List<?> list -> checkArray(list, own, pointer, context, depth);
             case Map<?, ?> map -> checkObject(map, own, pointer, context, depth);
-            default -> {
+            case null, default -> {
                 // null and booleans have no further keywords
             }
         }

@@ -229,7 +229,7 @@ function ResultSheet({ projectId, runId, resultId, onClose }: { projectId: strin
           <SheetDescription className="font-mono text-xs">{result.data?.operationKey}</SheetDescription>
         </SheetHeader>
         <div className="px-4 pb-6">
-          {result.isPending ? <Skeleton className="h-40" /> : result.isError ? <p className="text-destructive">{result.error.message}</p> : <ResultView result={result.data} />}
+          {result.isPending ? <Skeleton className="h-40" /> : result.isError ? <p className="text-destructive">{result.error.message}</p> : <ResultView result={result.data} projectId={projectId} />}
         </div>
       </SheetContent>
     </Sheet>

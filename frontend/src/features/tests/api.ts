@@ -97,6 +97,7 @@ export const testDetailSchema = testSummarySchema.omit({ expectedStatuses: true,
   specLocation: z.string().nullable(),
   rationale: z.string().nullable(),
   generatorVersion: z.string().nullable(),
+  aiModel: z.string().nullable().optional(),
   sourceSpecificationVersionId: z.string().nullable(),
   request: requestSchema,
   expectations: expectationsSchema,
@@ -166,6 +167,8 @@ export type TestFilter = {
   suiteId?: string | undefined
   category?: Category | undefined
   enabled?: boolean | undefined
+  origin?: z.infer<typeof originSchema> | undefined
+  reviewStatus?: z.infer<typeof reviewStatusSchema> | undefined
 }
 
 export const testKeys = {
@@ -193,6 +196,8 @@ export function useTests(projectId: string, filter: TestFilter, enabled = true) 
   if (filter.suiteId) params.set('suiteId', filter.suiteId)
   if (filter.category) params.set('category', filter.category)
   if (filter.enabled !== undefined) params.set('enabled', String(filter.enabled))
+  if (filter.origin) params.set('origin', filter.origin)
+  if (filter.reviewStatus) params.set('reviewStatus', filter.reviewStatus)
   return useQuery({
     queryKey: testKeys.list(projectId, filter),
     queryFn: ({ signal }) =>

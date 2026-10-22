@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge'
+import { ExplainFailure } from '@/features/ai/ExplainFailure'
 import { StatusBadge } from '@/features/specs/components/MethodBadge'
 import { cn } from '@/lib/utils'
 
@@ -147,7 +148,7 @@ function Timing({ result }: { result: ResultDetail }) {
 }
 
 /** Everything recorded about one execution. Request and response were redacted before storage. */
-export function ResultView({ result }: { result: ResultDetail }) {
+export function ResultView({ result, projectId }: { result: ResultDetail; projectId?: string }) {
   const request = result.request
   const body = request.body as { mode?: string; contentType?: string; value?: unknown; truncated?: boolean } | undefined
   const redirects = Array.isArray(request.redirects) ? (request.redirects as string[]) : []
@@ -174,6 +175,10 @@ export function ResultView({ result }: { result: ResultDetail }) {
           ) : null}
           <Assertions checks={result.checks} />
         </section>
+      ) : null}
+
+      {projectId && (result.outcome === 'FAILED' || result.outcome === 'ERROR' || result.outcome === 'INCONCLUSIVE') ? (
+        <ExplainFailure projectId={projectId} runId={result.testRunId} resultId={result.id} />
       ) : null}
 
       <Timing result={result} />

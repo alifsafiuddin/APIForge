@@ -1,0 +1,1028 @@
+{
+  "summary": {
+    "label": "qwen2.5-7b",
+    "model": "qwen2.5:7b",
+    "when": "2026-10-22T01:47:13.796Z",
+    "run": {
+      "total": 128,
+      "passed": 115,
+      "failed": 13,
+      "inconclusive": 0,
+      "error": 0,
+      "skipped": 0
+    },
+    "explanations": {
+      "cases": 10,
+      "validStructuredOutput": 10,
+      "meanRelevance": 0.97,
+      "fullyRelevant": 9,
+      "factsVerified": 9,
+      "factsCheckable": 9,
+      "factsTotal": 28,
+      "codeClaims": 1,
+      "latencyMs": {
+        "p50": 16050,
+        "p95": 25545,
+        "max": 25545
+      }
+    },
+    "suggestions": {
+      "operations": 7,
+      "validStructuredOutput": 7,
+      "created": 28,
+      "discardedDuplicate": 2,
+      "discardedInvalid": 5,
+      "discardedOther": 0,
+      "overlapsWithReason": 0,
+      "possibleDuplicates": 8,
+      "undocumentedInputs": 3,
+      "undocumentedStatuses": 2,
+      "retried": 0,
+      "latencyMs": {
+        "p50": 32963,
+        "p95": 63737,
+        "max": 63737
+      }
+    }
+  },
+  "explanations": [
+    {
+      "id": "health-status-enum",
+      "httpStatus": 200,
+      "latencyMs": 25545,
+      "model": "qwen2.5:7b",
+      "relevance": 0.6666666666666666,
+      "missing": [
+        "$.status|status field"
+      ],
+      "facts": 2,
+      "factsVerified": 0,
+      "factsCheckable": 0,
+      "causes": 1,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16143-d6e0-7c27-929f-ef31704671a6",
+        "resultId": "01a16143-6b5e-757c-a481-1be753b2e6a3",
+        "model": "qwen2.5:7b",
+        "latencyMs": 25483,
+        "createdAt": "2026-10-22T01:39:58.304254900Z",
+        "summary": "The test failed because the response status 'DEGRADED' does not match the expected 'UP' status as per the documented schema.",
+        "observedFacts": [
+          {
+            "statement": "The response body contains a status of 'DEGRADED'.",
+            "source": "ASSERTION",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The expected status according to the schema is 'UP'.",
+            "source": "ASSERTION",
+            "grounding": "NOT_CHECKABLE"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "The health check logic in the API implementation may be returning 'DEGRADED' instead of 'UP'.",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "The response body contains a status of 'DEGRADED'.",
+                "grounding": "NOT_CHECKABLE"
+              },
+              {
+                "text": "The expected status according to the schema is 'UP'.",
+                "grounding": "NOT_CHECKABLE"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Check the health check logic in the API implementation to ensure it correctly identifies the API's operational status.",
+          "Review the conditions under which the 'DEGRADED' status is returned."
+        ],
+        "suggestedChanges": [
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Ensure the health check logic returns 'UP' when the API is operational."
+          },
+          {
+            "target": "SPECIFICATION",
+            "change": "Verify the documented schema and update if necessary to reflect the actual operational statuses."
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "products-legacy-item",
+      "httpStatus": 200,
+      "latencyMs": 19521,
+      "model": "qwen2.5:7b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 4,
+      "factsVerified": 1,
+      "factsCheckable": 1,
+      "causes": 1,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16144-232e-76e4-ae1f-87eb9a5decf5",
+        "resultId": "01a16143-6b70-7f2b-a047-34321db109a8",
+        "model": "qwen2.5:7b",
+        "latencyMs": 19487,
+        "createdAt": "2026-10-22T01:40:17.838430900Z",
+        "summary": "The test failed due to schema mismatches in the response body.",
+        "observedFacts": [
+          {
+            "statement": "The response body contains invalid data types for certain fields.",
+            "source": "ASSERTION",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The response includes a negative value for a dimension field, which is not expected.",
+            "source": "ASSERTION",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The createdAt field uses a non-date-time string, violating the schema.",
+            "source": "ASSERTION",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The response status is 200, as expected.",
+            "source": "ASSERTION",
+            "grounding": "VERIFIED"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "The API implementation may have a bug in handling or validating the data for the product items.",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "$.items[0].price is a string instead of a number",
+                "grounding": "VERIFIED"
+              },
+              {
+                "text": "$.items[0].dimensions.widthCm is -1, which is less than 0.1",
+                "grounding": "VERIFIED"
+              },
+              {
+                "text": "$.items[0].createdAt is 'last spring', not a valid date-time string",
+                "grounding": "VERIFIED"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Check the validation logic for product items in the API implementation.",
+          "Verify the data source or transformation process that generates the product items.",
+          "Ensure that the createdAt field is correctly formatted according to the schema."
+        ],
+        "suggestedChanges": [
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Review and correct the validation logic to ensure that all fields match the specified schema."
+          },
+          {
+            "target": "SPECIFICATION",
+            "change": "Double-check the schema definitions to ensure they accurately reflect the expected data formats."
+          },
+          {
+            "target": "TEST",
+            "change": "Update the test to include more comprehensive validation checks for the response body."
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "product-missing-sku",
+      "httpStatus": 200,
+      "latencyMs": 20997,
+      "model": "qwen2.5:7b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 4,
+      "factsVerified": 2,
+      "factsCheckable": 2,
+      "causes": 2,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16144-7532-70d5-94e2-4e4a3325691b",
+        "resultId": "01a16143-6c3d-7004-bb36-45019f95561f",
+        "model": "qwen2.5:7b",
+        "latencyMs": 20960,
+        "createdAt": "2026-10-22T01:40:38.833522100Z",
+        "summary": "The test failed because the response did not include the required 'sku' property, which is documented as a required field in the schema.",
+        "observedFacts": [
+          {
+            "statement": "The response body is missing the 'sku' property.",
+            "source": "ASSERTION",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The expected status code is 200, but the response status is also 200.",
+            "source": "ASSERTION",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The schema requires the 'sku' property to be present.",
+            "source": "SCHEMA",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The response body does not match the documented schema for a 200 response.",
+            "source": "SCHEMA",
+            "grounding": "VERIFIED"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "The API implementation might not be populating the 'sku' field in the response.",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "$.sku required property 'sku' is missing.",
+                "grounding": "VERIFIED"
+              }
+            ]
+          },
+          {
+            "hypothesis": "There could be a bug in the test setup where the 'sku' field is not being included in the test data.",
+            "confidence": "LOW",
+            "evidence": [
+              {
+                "text": "$.sku required property 'sku' is missing.",
+                "grounding": "VERIFIED"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Verify that the API implementation correctly populates the 'sku' field in the response.",
+          "Check the test data and ensure that the 'sku' field is included and correctly formatted.",
+          "Review the API specification to ensure that the 'sku' field is required and properly documented."
+        ],
+        "suggestedChanges": [
+          {
+            "target": "TEST",
+            "change": "Ensure that the test data includes the 'sku' field and verify that it is correctly formatted."
+          },
+          {
+            "target": "SPECIFICATION",
+            "change": "Double-check that the 'sku' field is correctly documented as required in the schema."
+          },
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Verify that the 'sku' field is being populated in the response."
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "patch-content-type",
+      "httpStatus": 200,
+      "latencyMs": 14099,
+      "model": "qwen2.5:7b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 2,
+      "factsVerified": 0,
+      "factsCheckable": 0,
+      "causes": 1,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16144-ac43-71a9-a3d2-5cc31bd7266e",
+        "resultId": "01a16143-6c85-7b02-96eb-28beb035fd13",
+        "model": "qwen2.5:7b",
+        "latencyMs": 14066,
+        "createdAt": "2026-10-22T01:40:52.930584200Z",
+        "summary": "The API returned a response with a 'text/plain' Content-Type instead of 'application/json' as expected.",
+        "observedFacts": [
+          {
+            "statement": "The response's Content-Type is 'text/plain'.",
+            "source": "RESPONSE",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The expected Content-Type is 'application/json'.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "The API implementation might be incorrectly configured to return 'text/plain' for this PATCH request.",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "The response body is a JSON object, but the Content-Type is 'text/plain'.",
+                "grounding": "NOT_CHECKABLE"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Check the API implementation to ensure it correctly sets the Content-Type to 'application/json' for PATCH requests.",
+          "Verify that the media type 'application/json' is correctly documented and supported in the API contract.",
+          "Review the request handling logic to ensure it properly checks and sets the Content-Type header."
+        ],
+        "suggestedChanges": [
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Ensure the PATCH request handler sets the Content-Type to 'application/json' for successful responses."
+          },
+          {
+            "target": "TEST",
+            "change": "Update the test to also check the Content-Type and ensure it matches the documented schema."
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "delete-returns-200",
+      "httpStatus": 200,
+      "latencyMs": 16050,
+      "model": "qwen2.5:7b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 2,
+      "factsVerified": 2,
+      "factsCheckable": 2,
+      "causes": 1,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16144-eaf8-72e9-8a73-06f24e5e6a3a",
+        "resultId": "01a16143-6b0b-7f52-8eca-f2b37e4d1f53",
+        "model": "qwen2.5:7b",
+        "latencyMs": 16018,
+        "createdAt": "2026-10-22T01:41:08.984182100Z",
+        "summary": "The test failed because the API responded with a 200 status code instead of the expected 204, and the 200 status is not documented for this DELETE request.",
+        "observedFacts": [
+          {
+            "statement": "The actual response status was 200.",
+            "source": "ASSERTION",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The 200 status is not documented for the DELETE /products/{productId} operation.",
+            "source": "ASSERTION",
+            "grounding": "VERIFIED"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "The API implementation might be returning a 200 status for successful deletions, which is not aligned with the documented behavior.",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "The documented responses include 204, 401, and 404 statuses, but not 200.",
+                "grounding": "VERIFIED"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Check the API implementation to verify the status code returned for successful deletions.",
+          "Review the documentation to ensure it accurately reflects the current API behavior."
+        ],
+        "suggestedChanges": [
+          {
+            "target": "TEST",
+            "change": "Update the expected status to 200 if the API is indeed returning 200 for successful deletions."
+          },
+          {
+            "target": "SPECIFICATION",
+            "change": "Update the API specification to include 200 as a documented response for successful deletions."
+          },
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Ensure the API returns the correct status code (204) for successful deletions."
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "order-status-lost",
+      "httpStatus": 200,
+      "latencyMs": 18959,
+      "model": "qwen2.5:7b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 3,
+      "factsVerified": 1,
+      "factsCheckable": 1,
+      "causes": 1,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16145-3506-73a8-b9e1-8c83f94bd983",
+        "resultId": "01a16143-6da7-7f0b-807e-89642f128e84",
+        "model": "qwen2.5:7b",
+        "latencyMs": 18923,
+        "createdAt": "2026-10-22T01:41:27.942228700Z",
+        "summary": "The test failed because the response status was 201, but the status field in the response body was 'lost', which is not one of the allowed values ('accepted', 'packed', 'shipped').",
+        "observedFacts": [
+          {
+            "statement": "The response status is 201.",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The status field in the response body is 'lost'.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The allowed values for the status field are 'accepted', 'packed', and 'shipped'.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "The API implementation may be returning a status of 'lost' for orders that should be in one of the 'accepted', 'packed', or 'shipped' states.",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "The response body contains a status of 'lost'.",
+                "grounding": "NOT_CHECKABLE"
+              },
+              {
+                "text": "The documented schema specifies that the status must be one of 'accepted', 'packed', or 'shipped'.",
+                "grounding": "NOT_CHECKABLE"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Check the logic in the API that determines the status of an order to ensure it correctly transitions to 'accepted', 'packed', or 'shipped'.",
+          "Review the business rules or conditions that should trigger the order status to be set to 'lost' and ensure they are not incorrectly applied."
+        ],
+        "suggestedChanges": [
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Ensure the order status is set correctly based on the business logic and transitions to 'accepted', 'packed', or 'shipped' as expected."
+          },
+          {
+            "target": "SPECIFICATION",
+            "change": "Verify the status enum in the schema to ensure it accurately reflects the possible states of an order."
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "order-quantity-maximum",
+      "httpStatus": 200,
+      "latencyMs": 24607,
+      "model": "qwen2.5:7b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 3,
+      "factsVerified": 1,
+      "factsCheckable": 1,
+      "causes": 2,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16145-9521-7d0b-b1a9-901684b26b97",
+        "resultId": "01a16143-6e9a-7ab7-a71b-63075d7e6373",
+        "model": "qwen2.5:7b",
+        "latencyMs": 24571,
+        "createdAt": "2026-10-22T01:41:52.545815300Z",
+        "summary": "The test failed because the API responded with a 201 status code instead of the expected 400 status code, and the quantity field did not trigger the validation as expected.",
+        "observedFacts": [
+          {
+            "statement": "The test expected a 400 status code but received a 201 status code.",
+            "source": "ASSERTION",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The quantity field in the request body was set to 1000, which should have triggered the validation error.",
+            "source": "ASSERTION",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The response body did not include the expected error schema.",
+            "source": "ASSERTION",
+            "grounding": "NOT_CHECKABLE"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "The validation logic for the 'lines[0].quantity' field might not be correctly implemented or configured.",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "The quantity field was set to 1000, which should have triggered the validation error.",
+                "grounding": "NOT_CHECKABLE"
+              },
+              {
+                "text": "The response status was 201, indicating that the request was accepted.",
+                "grounding": "VERIFIED"
+              }
+            ]
+          },
+          {
+            "hypothesis": "The API might be configured to accept values up to 1000 for the 'lines[0].quantity' field, or the validation is bypassed for some reason.",
+            "confidence": "LOW",
+            "evidence": [
+              {
+                "text": "The maximum value for the 'lines[0].quantity' field is documented as 999, but the test did not pass.",
+                "grounding": "NOT_CHECKABLE"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Check the validation logic for the 'lines[0].quantity' field in the API implementation.",
+          "Verify the configuration settings for input validation, ensuring that the maximum value is correctly set to 999.",
+          "Review the request handling code to ensure that the validation is being applied before the response is generated."
+        ],
+        "suggestedChanges": [
+          {
+            "target": "TEST",
+            "change": "Ensure that the test case correctly handles the scenario where the maximum value is inclusive (999) and the validation should fail."
+          },
+          {
+            "target": "SPECIFICATION",
+            "change": "Clarify the validation rules in the API specification to ensure that the maximum value is correctly documented."
+          },
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Review and correct the validation logic to ensure that the maximum value for the 'lines[0].quantity' field is correctly enforced."
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "console-timeout",
+      "httpStatus": 200,
+      "latencyMs": 15309,
+      "model": "qwen2.5:7b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 3,
+      "factsVerified": 0,
+      "factsCheckable": 0,
+      "causes": 1,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16145-d533-712b-803b-f33267d2e395",
+        "resultId": "01a16145-9959-7778-a041-f6ae2026068e",
+        "model": "qwen2.5:7b",
+        "latencyMs": 15281,
+        "createdAt": "2026-10-22T01:42:08.947073100Z",
+        "summary": "The GET request to /lab/slow timed out after 1000 ms.",
+        "observedFacts": [
+          {
+            "statement": "The request method was GET.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The request path was /lab/slow?ms=3000.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "No response data was received within the read timeout of 1000 ms.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "The API implementation at /lab/slow is slow and takes longer than the 1000 ms timeout to process the request.",
+            "confidence": "HIGH",
+            "evidence": [
+              {
+                "text": "The query parameter ms=3000 indicates the API is expected to delay for 3000 milliseconds.",
+                "grounding": "NOT_CHECKABLE"
+              },
+              {
+                "text": "The timeout is 1000 ms, which is shorter than the delay time.",
+                "grounding": "NOT_CHECKABLE"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Increase the timeout value in the test to match or exceed the 3000 ms delay time.",
+          "Verify the implementation of the /lab/slow endpoint to ensure it is not unnecessarily slow."
+        ],
+        "suggestedChanges": [
+          {
+            "target": "TEST",
+            "change": "Increase the timeout value to 3000 ms or more to accommodate the expected delay."
+          },
+          {
+            "target": "SPECIFICATION",
+            "change": "Revisit the specification for the /lab/slow endpoint to ensure the delay time is reasonable and documented."
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "console-malformed-json",
+      "httpStatus": 200,
+      "latencyMs": 13920,
+      "model": "qwen2.5:7b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 3,
+      "factsVerified": 1,
+      "factsCheckable": 1,
+      "causes": 1,
+      "codeClaim": true,
+      "explanation": {
+        "id": "01a16146-0bc5-77f4-8afd-e1d267c134e4",
+        "resultId": "01a16145-d55f-75c4-acda-7921405c076b",
+        "model": "qwen2.5:7b",
+        "latencyMs": 13885,
+        "createdAt": "2026-10-22T01:42:22.916896900Z",
+        "summary": "The test failed because the response body is not valid JSON.",
+        "observedFacts": [
+          {
+            "statement": "The body is not valid JSON at line 1, column 17.",
+            "source": "ASSERTION",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The response status is 200, indicating success.",
+            "source": "RESPONSE",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The body of the response is incomplete, ending with an unquoted key.",
+            "source": "RESPONSE",
+            "grounding": "NOT_CHECKABLE"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "The API implementation may not be properly closing JSON objects or arrays.",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "The body ends with an incomplete JSON object: {\"items\": [1, 2,",
+                "grounding": "VERIFIED"
+              },
+              {
+                "text": "This suggests an issue in the API's response generation logic.",
+                "grounding": "NOT_CHECKABLE"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Check the API endpoint that generates the JSON response for any unclosed objects or arrays.",
+          "Review the code that handles the creation of JSON responses, especially around array and object construction."
+        ],
+        "suggestedChanges": [
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Ensure that all JSON objects and arrays are properly closed in the response body."
+          },
+          {
+            "target": "TEST",
+            "change": "Update the test to handle incomplete JSON responses more gracefully, possibly by checking for partial JSON structures."
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": [
+          "The answer claims or implies access to source code, which the model was never given. Treat such statements as guesses."
+        ]
+      }
+    },
+    {
+      "id": "console-status-503",
+      "httpStatus": 200,
+      "latencyMs": 12909,
+      "model": "qwen2.5:7b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 2,
+      "factsVerified": 1,
+      "factsCheckable": 1,
+      "causes": 1,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16146-3e60-78ae-b143-567a56fa1bcb",
+        "resultId": "01a16146-0bee-7c6e-8c2d-a54427a682fd",
+        "model": "qwen2.5:7b",
+        "latencyMs": 12881,
+        "createdAt": "2026-10-22T01:42:35.872010900Z",
+        "summary": "The test failed because the API returned a 503 status code, which does not match the expected 2XX range.",
+        "observedFacts": [
+          {
+            "statement": "The actual status code is 503.",
+            "source": "ASSERTION",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The expected status code range is 2XX.",
+            "source": "ASSERTION",
+            "grounding": "NOT_CHECKABLE"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "The API implementation may be experiencing an issue that causes it to return a 503 Service Unavailable status.",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "The response body indicates a 'Status 503 on request'.",
+                "grounding": "VERIFIED"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Check the API's health status or logs to see if there are any known issues or errors.",
+          "Verify if the API's configuration or environment variables are correctly set."
+        ],
+        "suggestedChanges": [
+          {
+            "target": "TEST",
+            "change": "Update the test to include 503 as a valid expected status code, if the 503 status is expected in certain scenarios."
+          },
+          {
+            "target": "SPECIFICATION",
+            "change": "Review the API specification to ensure that 503 is a valid response for the given endpoint."
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    }
+  ],
+  "suggestions": [
+    {
+      "operationKey": "GET /health",
+      "httpStatus": 200,
+      "latencyMs": 27310,
+      "model": "qwen2.5:7b",
+      "attempts": 1,
+      "created": 5,
+      "discardedDuplicate": 0,
+      "discardedInvalid": 0,
+      "discardedOther": 0,
+      "overlapsWithReason": 0,
+      "possibleDuplicates": 0,
+      "undocumentedInputs": 3,
+      "undocumentedStatuses": 2,
+      "names": [
+        "Check minimal required fields",
+        "Test maximum length of status field",
+        "Test invalid status value",
+        "Test response with additional properties",
+        "Test response without required field"
+      ],
+      "discarded": []
+    },
+    {
+      "operationKey": "GET /products",
+      "httpStatus": 200,
+      "latencyMs": 41491,
+      "model": "qwen2.5:7b",
+      "attempts": 1,
+      "created": 5,
+      "discardedDuplicate": 0,
+      "discardedInvalid": 0,
+      "discardedOther": 0,
+      "overlapsWithReason": 0,
+      "possibleDuplicates": 0,
+      "undocumentedInputs": 0,
+      "undocumentedStatuses": 0,
+      "names": [
+        "Request with limit at maximum 99 and category 'tools'",
+        "Request with limit at maximum 100 and no category",
+        "Request with limit at minimum 1 and no category",
+        "Request with limit at minimum 1 and category 'kitchen'",
+        "Request with limit at maximum 100 and category 'garden'"
+      ],
+      "discarded": []
+    },
+    {
+      "operationKey": "POST /products",
+      "httpStatus": 200,
+      "latencyMs": 63737,
+      "model": "qwen2.5:7b",
+      "attempts": 1,
+      "created": 5,
+      "discardedDuplicate": 0,
+      "discardedInvalid": 0,
+      "discardedOther": 0,
+      "overlapsWithReason": 0,
+      "possibleDuplicates": 0,
+      "undocumentedInputs": 0,
+      "undocumentedStatuses": 0,
+      "names": [
+        "Field 'sku' with invalid pattern",
+        "Field 'tags' with duplicate items",
+        "Field 'dimensions.heightCm' at exclusive minimum 0",
+        "Field 'tags' with empty array",
+        "Field 'tags' with null value"
+      ],
+      "discarded": []
+    },
+    {
+      "operationKey": "GET /products/{productId}",
+      "httpStatus": 200,
+      "latencyMs": 30613,
+      "model": "qwen2.5:7b",
+      "attempts": 1,
+      "created": 4,
+      "discardedDuplicate": 1,
+      "discardedInvalid": 0,
+      "discardedOther": 0,
+      "overlapsWithReason": 0,
+      "possibleDuplicates": 4,
+      "undocumentedInputs": 0,
+      "undocumentedStatuses": 0,
+      "names": [
+        "Path parameter 'productId' at maximum value",
+        "Path parameter 'productId' above maximum value",
+        "Path parameter 'productId' with leading zeros",
+        "Path parameter 'productId' with a value that is not an integer"
+      ],
+      "discarded": [
+        {
+          "name": "Path parameter 'productId' with a value that is exactly the minimum",
+          "reason": "Sends the same request with the same expected statuses as the existing test “Path parameter 'productId' at minimum 1”, and no reason was given."
+        }
+      ]
+    },
+    {
+      "operationKey": "PATCH /products/{productId}",
+      "httpStatus": 200,
+      "latencyMs": 32963,
+      "model": "qwen2.5:7b",
+      "attempts": 1,
+      "created": 0,
+      "discardedDuplicate": 0,
+      "discardedInvalid": 5,
+      "discardedOther": 0,
+      "overlapsWithReason": 0,
+      "possibleDuplicates": 0,
+      "undocumentedInputs": 0,
+      "undocumentedStatuses": 0,
+      "names": [],
+      "discarded": [
+        {
+          "name": "Field 'name' with a pattern that does not match",
+          "reason": "Not a valid test: The test definition is invalid. (request.pathParams: must set exactly the path parameters productId)"
+        },
+        {
+          "name": "Field 'price' with a value that is not a number",
+          "reason": "Not a valid test: The test definition is invalid. (request.pathParams: must set exactly the path parameters productId)"
+        },
+        {
+          "name": "Field 'stock' with a value that is not an integer",
+          "reason": "Not a valid test: The test definition is invalid. (request.pathParams: must set exactly the path parameters productId)"
+        },
+        {
+          "name": "Field 'name' with a value that is exactly at minLength 3",
+          "reason": "Not a valid test: The test definition is invalid. (request.pathParams: must set exactly the path parameters productId)"
+        },
+        {
+          "name": "Field 'stock' with a value that is exactly at maximum 10000",
+          "reason": "Not a valid test: The test definition is invalid. (request.pathParams: must set exactly the path parameters productId)"
+        }
+      ]
+    },
+    {
+      "operationKey": "DELETE /products/{productId}",
+      "httpStatus": 200,
+      "latencyMs": 29967,
+      "model": "qwen2.5:7b",
+      "attempts": 1,
+      "created": 4,
+      "discardedDuplicate": 1,
+      "discardedInvalid": 0,
+      "discardedOther": 0,
+      "overlapsWithReason": 0,
+      "possibleDuplicates": 4,
+      "undocumentedInputs": 0,
+      "undocumentedStatuses": 0,
+      "names": [
+        "Path parameter 'productId' above maximum",
+        "Path parameter 'productId' at maximum",
+        "Path parameter 'productId' with a value that is an enum (if applicable)",
+        "Path parameter 'productId' with a value that is not an enum (if applicable)"
+      ],
+      "discarded": [
+        {
+          "name": "Path parameter 'productId' with a value that is exactly the minimum",
+          "reason": "Sends the same request with the same expected statuses as the existing test “Path parameter 'productId' at minimum 1”, and no reason was given."
+        }
+      ]
+    },
+    {
+      "operationKey": "POST /orders",
+      "httpStatus": 200,
+      "latencyMs": 50225,
+      "model": "qwen2.5:7b",
+      "attempts": 1,
+      "created": 5,
+      "discardedDuplicate": 0,
+      "discardedInvalid": 0,
+      "discardedOther": 0,
+      "overlapsWithReason": 0,
+      "possibleDuplicates": 0,
+      "undocumentedInputs": 0,
+      "undocumentedStatuses": 0,
+      "names": [
+        "Invalid 'delivery' address format",
+        "Invalid 'delivery' pickup point format",
+        "Missing 'couponCode' with valid request",
+        "Invalid 'couponCode' format",
+        "Request with 'express' set to true and 'delivery' as address"
+      ],
+      "discarded": []
+    }
+  ]
+}

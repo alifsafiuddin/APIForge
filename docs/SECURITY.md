@@ -191,16 +191,19 @@ Other client settings:
 | Logging ✅ Phase 5 | No bodies, header values or variable values at INFO and above. Request logging includes method, host, path template, status, duration and request id. A log-capture test asserts that a planted secret never appears in logs |
 | AI context | Built only from redacted snapshots. Bodies truncated to 8 KB. Never includes environment variables or auth config |
 
-## 8. AI-specific threats
+## 8. AI-specific threats ✅ Phase 8
 
 | Threat | Control |
 |---|---|
-| Prompt injection via response bodies or spec descriptions | Untrusted text is placed in clearly delimited data sections. The system prompt states it is data. More importantly, **output is never trusted**: it is schema-validated data with no tool calling and no execution path |
-| AI output executes code or reaches arbitrary hosts | Tests are declarative (no scripts). AI suggestions may set only path params, query, headers (allowlisted, no hop-by-hop/`Host`) and body for an **existing** operation key. The base URL always comes from the environment. Every suggestion is `PENDING_REVIEW` and must be approved before it can run, and it then passes the same outbound guard |
-| Hallucinated citations | Context items are given ids (`A1`, `R3`, `S2`). Output citations must reference supplied ids; unknown ids are dropped and the result is flagged |
-| Oversized or malformed output | JSON schema output via Ollama `format`, then Jackson parsing with strict DTOs, Bean Validation (sizes, enums), and a max response length. Any failure leads to a deterministic fallback |
-| Resource exhaustion | AI calls use a semaphore (default 2 concurrent), timeout (default 120 s), and per-user rate limit. AI failures never affect readiness or deterministic testing |
-| Data leakage to a third party | Ollama URL is server config only. No paid or remote AI API is used. Docs warn that pointing `OLLAMA_BASE_URL` at a remote host sends redacted test data there |
+| Prompt injection via response bodies or spec descriptions | Untrusted text is data inside a JSON document; output is never trusted: schema-validated data with no tool calling and no execution path |
+| AI output executes code or reaches arbitrary hosts | Tests are declarative (no scripts). Suggestions may set only path parameters, query, headers (forbidden: `Host`, `Authorization`, `Cookie`, hop-by-hop and others) and body for the operation that was asked about, validated like a manual edit. The base URL always comes from the environment. Every suggestion is `PENDING_REVIEW`, cannot run until approved, and then passes the outbound guard like any test |
+| Model output changes the target system | Explanations are text for a person; suggested changes are proposals. Nothing is applied, and suggested tests only run after approval in an environment whose policy allows them |
+| Hallucinated facts | Observed facts citing concrete values are checked against the data the model was given and marked VERIFIED / UNVERIFIED / NOT_CHECKABLE; claims of having read source code are flagged; every explanation lists its inputs and states that no source code was provided |
+| Oversized or malformed output | JSON schema output via Ollama `format`, then strict validation against the same schema and binding with unknown properties rejected; output token limit; a cut-off answer is invalid. Failures are reported (502), retried at most once |
+| Resource exhaustion | 1 concurrent model call by default (2 s queue wait, then "busy"), 120 s request timeout without retry, at most 2 attempts, 10 AI requests per user per minute, prompt limit of 24 000 characters checked before the call. AI failures never affect readiness or deterministic testing |
+| Secrets in prompts | Prompts are built from stored results (already redacted) plus a second sanitizer: sensitive keys, bearer/basic tokens, JWTs, long opaque strings, credential headers and anything «redacted» are removed, the host is never included, and sizes are bounded. Environment values are never read |
+| Prompt content in logs or audit | Prompts and answers are not logged; the audit records task, model, outcome, attempts, latency, sizes and the prompt's SHA-256 only. Explanations (validated answers) are stored; prompts are not |
+| Data leakage to a third party | `OLLAMA_BASE_URL` is server configuration (validated: http(s), no credentials) and not user input. No remote AI API is used. docs/AI.md warns that pointing it at another host sends the sanitized prompts there |
 
 ## 9. Web application hardening
 

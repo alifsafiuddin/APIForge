@@ -1,56 +1,63 @@
 # Project Status
 
-**Current phase**: Phase 7 — Coverage and missing-scenario analysis — **complete** (2026-10-22)
-**Next phase**: decided by the next phase brief (planned: AI through a local model)
-**Runnable today**: sign-in and private projects; OpenAPI import and explorer; deterministic test generation and curation; environments with encrypted secrets, test runs and console requests through a guarded outbound client; contract validation with run reports and comparisons; **specification coverage with defined metrics, gaps, drill-down and changes between versions**. Not yet: AI.
+**Current phase**: Phase 8 — Local AI integration with Ollama — **complete** (2026-10-22)
+**Next phase**: decided by the next phase brief (planned: hardening and release)
+**Runnable today**: everything from Phases 1–7 (import, explorer, deterministic generation, secure execution, contract validation and reporting, coverage) plus **optional local AI**: test suggestions reviewed before they can run, and failure explanations with facts checked against the data. Without Ollama everything except the two AI actions works unchanged.
 
-## Phase 7 summary
+## Phase 8 summary
 
 ### Delivered
 
 | Requirement | Implementation | Where |
 |---|---|---|
-| Total discovered operations; operations with and without tests | Operations of the active version; "with tests" = at least one enabled (enabled, approved, active) test | `coverage/service/CoverageCalculator` (ADR-028) |
-| Total enabled test cases; executed test cases | Distinct enabled tests; executed = distinct tests with an execution attempt in a test run on this version (skipped tests are not executed) | `CoverageCalculator` |
-| Passed, failed, errored, skipped and inconclusive tests | Latest attempted outcome per distinct test (an attempt beats a newer skip; skip-only = skipped; no result = not run), all environments or one | `CoverageCalculator.Latest`, `TestResultRepository.findForCoverage*` |
-| Documented response codes exercised | Per documented response (code, class, default): *targeted* by an expected status, *exercised* when a run received a matching status (exact → class → default); undocumented statuses received are listed | `CoverageCalculator.documentedResponse/targetedResponses` |
-| Known schema branches or constraints covered | Request constraints = the single-fault and boundary scenarios the generator derives (required, type, bounds, lengths, item counts, enum, content type, accepted boundaries), covered by an enabled test of that scenario; oneOf/anyOf alternatives in request bodies exercised by test bodies; scenarios the generator cannot build listed with the reason | `ScenarioKind`, `SchemaBranches` |
-| Define every metric clearly | Every metric carries its definition in the API and on the page; ADR-028 states them in full | `CoverageCalculator.metrics`, `CoveragePage` |
-| Endpoint coverage separate from the pass rate | Metrics are grouped as *Test design* and *Execution*; the pass rate is labelled "an execution result, not coverage" | `CoverageViews.Group`, `CoveragePage` |
-| No claim of code coverage | The page states that this is specification coverage and that APIForge cannot see the target's source code | `CoveragePage` |
-| Endpoints without tests; documented responses not exercised; common missing negative scenarios | Gaps panel: untested operations, unexercised responses (and whether a test expects them), missing kinds (credentials, missing required input, wrong type, out of range, outside an enum, unsupported content type) with the operations they are missing for | `CoverageCalculator.gaps` |
-| Track changes when a specification version changes | Operations added, removed (stale tests), changed (parameters, request body, responses, security, referenced schemas) with tests generated from an earlier version; summary snapshots after generation, test runs and activation (V11) compared with the live numbers; history | `SpecificationDiff`, `CoverageSnapshotListener`, `coverage_snapshots` |
-| Filters and drill-down | Environment filter for execution; operation table filtered by gap (no tests, responses, negatives, constraints, failing, undocumented statuses), method, tag and search; per-operation sheet (responses, negative kinds, scenarios with "only missing", skipped scenarios, branches, tests with duplicates and outcomes) | `CoveragePage`, `OperationCoverageSheet`, `VersionChangesView` |
-| Avoid double-counting duplicated test cases | Enabled tests of one operation with the same request (canonical JSON) and expected statuses count once; their outcome is the latest attempt of any copy; a test's repeated runs count once | `CoverageService.fingerprint` |
-| Backend tests for all metric calculations | `CoverageCalculatorTest` (26, every metric on a hand-worked project), `CoverageRulesTest` (29), `CoverageIntegrationTest` (3) | docs/TESTING.md |
+| Ollama with a compatible stable Spring AI release | Spring AI 2.0.1 (`spring-ai-ollama`, through `OllamaApi`) on Spring Boot 4.1.1; dependency convergence passes (antlr aligned to 4.13.2); confined to one gateway by ArchUnit | `ai/client/OllamaGateway`, ADR-029 |
+| Useful without AI | No deterministic feature calls the model; AI errors are 503/504/502 with the reason; UI disables AI actions with the reason | verified offline (completion check) |
+| A. Suggestions: description, schema, inventory, sanitized examples; uncovered scenarios | Prompt: operation, parameters, body and responses with schemas inlined (examples sanitized), existing tests (names, categories, scenarios, statuses), scenarios the generator could not build | `TestSuggestionService` |
+| Strict JSON DTO, all suggestions validated, review before accepting, no code, no unexplained duplicates | One schema for Ollama `format` and validation; strict binding; each suggestion validated like a manual edit; identical to an existing test → discarded unless a reason is given; one differing value → flagged; stored `PENDING_REVIEW`, not executable; Accept / Edit / Reject | `StructuredOutput`, `AiSuggestionsPanel` |
+| B. Explanation: assertion, expected/actual, schema, status, sanitized context; summary, causes, evidence, steps, changes | Prompt from the stored (redacted) result; answer with summary, observed facts (with source), likely causes (confidence, evidence), debugging steps, suggested changes | `FailureExplanationService`, `ExplainFailure` |
+| Facts vs hypotheses; no claimed source access; no automatic changes | Facts graded VERIFIED / UNVERIFIED / NOT_CHECKABLE against the input; hypotheses separate; source-code claims flagged; inputs listed, `sourceCodeProvided: false`; changes are proposals | same |
+| C. Base URL and model by environment; availability check | `OLLAMA_BASE_URL` (validated), `APIFORGE_AI_MODEL`, `APIFORGE_AI_ENABLED`; status by listing models (READY / MODEL_MISSING / UNAVAILABLE / DISABLED) | `AiProperties`, `AiStatusService` |
+| Model not found, Ollama down, timeouts, malformed output, overload | Classified failures with their own error codes; retry only overload and invalid output, once | `OllamaGateway.classify`, `AiCallRunner` |
+| Size limits, bounded retries, no endless expensive calls | 24 000-character prompt limit (checked before the call), 1 500 output tokens, 120 s timeout without retry, at most 2 attempts, 1 concurrent call, 10 per user per minute | `AiProperties` |
+| Secrets out of prompts; auditable without prompt content | Second sanitizer over already-redacted data, no hosts; audit with model, outcome, attempts, latency, sizes and prompt SHA-256 | `PromptSanitizer`, `AiCallRunner.audit` |
+| Model and operation status in the UI | Header chip (model, state, details, Check again); loading with elapsed seconds, success, error with retry | `AiStatusBadge`, panels |
+| D. Evaluation dataset; JSON validity, relevance, grounding, duplicates, latency; results documented | 10 known failures with expected facts, 7 operations for suggestions, a runner; results for two models | `evaluation/ai/`, docs/AI_EVALUATION.md |
+| E. Suggestions panel, Explain Failure, states, accept/edit/reject | Tests tab panel; result views (runs and console) | `features/ai` |
+| Install Ollama and choose a model by hardware | Steps, hardware table, configuration, troubleshooting | docs/AI.md |
 
-### Verification (executed 2026-10-22; Windows 11, Docker Desktop 29.9.1, Node 24.22.0, JDK 21.0.8)
+### Verification (executed 2026-10-22; Windows 11, Docker Desktop 29.9.1, Node 24.22.0, JDK 21.0.8, Ollama 0.40.7, RTX 3060 Laptop 6 GB)
 
 | Check | Method | Result |
 |---|---|---|
-| Backend build and tests (clean checkout) | `git checkout-index` of the staged tree into an empty directory, `mvnw verify` | ✅ **745 tests, 0 failures, 0 errors, 0 skipped**; compiled with all lint warnings as errors; enforcer and architecture rules pass; line coverage 92.8% (5775/6220), branch 79.0%; `coverage` package 96.2% lines, 85.0% branches |
-| Frontend (clean checkout) | `npm ci`, `npm run check`, coverage, `npm run build` | ✅ 0 vulnerabilities; 0 lint findings; tsc clean; **95/95 tests**; lines 88.5%, branches 74.5%; build without warnings |
-| Migration on existing data | Backend jar started against the Phase 6 dev database | ✅ V10 → V11 applied |
-| **Completion check**: a specification with known endpoints and scenarios; metrics calculated by hand; the dashboard must match | `samples/coverage-lab-openapi.yaml` (5 operations) against the Warehouse Lab server, driven in headless Microsoft Edge (import and generation through the UI). Every expected number was worked out from the specification and the documented generation rules **before** running (written down in the check script and in samples/README.md), then the documented steps were performed: 5 tests disabled, one test turned into a duplicate, a read-only run, then a DELETE-only run in a destructive environment, then version 2 imported | ✅ **48/48 checks, run three times on fresh projects.** Generated 30 = 1+6+14+6+3; operations with tests 4 of 5; distinct enabled tests 24 (1 duplicate not counted); responses targeted 12 of 14; request constraints 15 of 17; branches 0 of 0; negative kinds 10 of 12; executed 12 of 24, passed 12 of 12, 12 skipped, 0 not run; responses exercised 7 of 14; the 7 unexercised responses, the untested `/reports`, the 2 missing negative kinds and all 5 operation rows exactly as calculated; per environment: read-only 6 executed / 18 skipped / 4 responses, destructive 6 executed / 18 not run / 3 responses. Version 2: added `GET /products` (no tests), removed `/reports` (3 stale tests), `DELETE` changed (responses; 6 tests from version 1), 3 unchanged; baseline = the snapshot after the DELETE run with the same numbers; version 2 shows 0 executed (runs on version 1 do not count); history activation → generation → 2 runs → activation. UI: the same numbers on the cards (80%, 88%, 12 of 12), filters, drill-down, version changes; no horizontal scrolling at 390 px; no JavaScript errors |
+| Backend build and tests (clean checkout) | `git checkout-index` of the staged tree into an empty directory, `mvnw verify` | ✅ **801 tests, 0 failures, 0 errors, 0 skipped**; compiled with all lint warnings as errors; enforcer (incl. dependency convergence with Spring AI) and architecture rules pass; line coverage 92.9% (6588/7089), branch 78.5%; `ai` package 93.4% lines, 73.7% branches. A first clean run had 1 failure — the migration-order test did not yet list V12 — fixed and re-run |
+| Frontend (clean checkout) | `npm ci`, `npm run check`, coverage, `npm run build` | ✅ 0 vulnerabilities; 0 lint findings; tsc clean; **100/100 tests**; lines 89.5%, branches 75.5%; build without warnings |
+| Migration on existing data | Backend jar against the Phase 7 dev database | ✅ V11 → V12 applied |
+| **Completion check**: run with a local model, verify structured output, disconnect Ollama, test malformed output | Headless Microsoft Edge against the running stack with Ollama (`qwen2.5:7b` on the GPU) and the Warehouse Lab server in violation mode, three stages in one run: (1) live — AI suggestions and an explanation through the UI; (2) Ollama processes stopped; (3) the backend pointed at a fake Ollama answering malformed output | ✅ **27/27 checks.** Live: status READY with the model in the header; loading state; 5 suggestions stored `AI_SUGGESTED`/pending, with request, expectations, rationale and model, not runnable; accept and reject recorded; explanation (19.3 s) with summary, graded facts, hypotheses, steps and changes, `sourceCodeProvided: false`, facts and hypotheses shown apart. Offline: UNAVAILABLE in API and header, "Suggest tests" disabled with the reason, API 503 `AI_UNAVAILABLE` (no hang), generation (128 tests), a run with contract validation (129 tests, 13 deliberate failures) and coverage still work, a stored explanation stays readable. Malformed: error shown with a retry, nothing stored, exactly 2 model calls, explanation 502 `AI_INVALID_OUTPUT`, earlier explanation unchanged. No JavaScript errors |
+| Evaluation | `evaluation/ai/run-eval.mjs` against `qwen2.5:7b` and `llama3.2:3b` | ✅ Recorded in docs/AI_EVALUATION.md: both 10/10 and 7/7 valid structured output; explanations fully relevant 9/10 for both; all checkable facts found in the data; median latency 16.1 s vs 5.3 s (explanations) and 33.0 s vs 8.1 s (suggestions); suggestions: qwen 28 stored / 7 discarded, llama 13 stored / 34 discarded; manual review: 7 of qwen's 28 useful, 11 not useful or wrong |
+| Secrets and audit | `psql` and backend logs after the runs | ✅ 103 AI requests audited (OK, INVALID_OUTPUT, UNAVAILABLE) with no prompt content; the demo key appears 0 times in explanations, AI tests and the logs |
 
 ### Defects found and fixed during this phase
 
-- A test without results crashed the calculator (`Map.merge` with a null value); found by the first unit test run.
-- Branches of recursive schemas were listed again at every nesting level; cycle detection now keys on where a schema is defined.
-- "Operations without tests" had a one-line definition; it now says what it means and where the list is.
-- Completion-check script issues (not product defects): a filter assertion read the table before it re-rendered, and a text check matched `/reports` in the description.
+- **`null` crashed the shared schema validator** (pattern `switch` without `case null`) when a model answered `"value": null`; the same bug could have broken contract validation of `null` response fields. Found by the evaluation.
+- **False "source code" claims**: a JSON parser position quoted from the data matched the detector; phrases present in the input no longer count.
+- **Exact duplicates missed** because path/query values were compared with JSON types (`1` vs `"1"`); now compared as text, which also improves coverage's duplicate count.
+- **Timeouts were reported as Ollama errors**: Spring AI wraps the transport exception; the classifier now searches the whole cause chain.
+- **The per-user AI rate limit** stopped the evaluation of the fast model (by design); the evaluation client now honours `retryAfterSeconds`.
+- The migration-order test did not list V12 (first clean-checkout run).
+- VS Code's Java build writes into `target/classes`, so Maven sometimes skipped compiling edited sources locally; final results come from clean checkouts built by `javac`.
 
 ### Known limitations
 
-- Coverage is of the **active** version. Older versions are visible through their snapshots (summary numbers), not as full reports, because tests are updated in place when a new version is generated.
-- Request constraints are those APIForge's generator can test one at a time; `pattern`, formats, `minProperties`/`additionalProperties` and the contents of oneOf/anyOf alternatives are not in the denominator (the drill-down lists what was skipped and why). Response schema branches are not tracked.
-- A test written by hand has no scenario key, so it counts for operation, response and duplicate metrics but not for constraint or negative-kind coverage.
-- Snapshots are written on generation, finished test runs and activation; disabling or editing tests changes the live numbers but writes no snapshot until the next such event.
-- The cross-project dashboard planned in API_DESIGN was not part of this brief and is not implemented.
-- GitHub CI status for this branch is checked by the user.
+- Suggestion quality depends heavily on the model: with `qwen2.5:7b` about a quarter of stored suggestions were judged useful and some invent constraints; review is required (and enforced).
+- Grounding can only check facts that cite concrete values (about a third of facts in the evaluation).
+- Model calls are synchronous HTTP requests (up to the timeout) and not cancellable from the UI.
+- Prompts are English; output follows the prompt language.
+- Only `qwen2.5:7b` and `llama3.2:3b` were evaluated, on one machine and one small dataset.
+- GitHub CI does not run Ollama; AI is tested there with the scripted fake. CI status for this branch is checked by the user.
 
 ## History
 
+- **Phase 7 (2026-10-22)** — Specification coverage (V11): defined metrics with test design kept apart from execution, gaps, filters, drill-down, duplicates counted once, snapshots and changes across versions. 745 backend and 95 frontend tests; completion check 48/48 against hand-calculated metrics. Committed as `dcc870b`.
 - **Phase 6 (2026-10-22)** — Response contract validation (documented status, media type, JSON syntax, body schema with JSON paths, expected and actual), honest outcomes (skipped never counted as passed), run reports with outcome filters, body inspection, timing and run comparison (V10). 687 backend and 90 frontend tests; completion check 27/27 against the Warehouse Lab server with deliberate violations (reported failures equal the server's actual violations). Committed as `476ae9d`.
 - **Phase 5 (2026-10-21)** — Secure execution engine (V9): environments with encrypted write-only secrets, a single guarded outbound client (strict URL parsing, DNS validated before connecting, revalidated redirects, limits), asynchronous cancellable runs and a console, redaction everywhere. 624 backend and 85 frontend tests; completion check 25/25 against the local Warehouse Lab server (128 tests, 1 deliberate failure). Committed as `0baf58f`.
 - **Phase 4 (2026-10-21)** — Deterministic test generation (V8): validated values, single-fault negatives, explicit expectations, stable scenario identity, idempotent regeneration; test workspace with review, edit, enable/disable and suites. 388 backend and 81 frontend tests; completion check with the Warehouse Lab sample (128 tests, regeneration repeatable). Committed as `58aa5b7`.
@@ -74,7 +81,7 @@
 - [x] Phase 5 — Secure execution engine (environments, secrets, outbound safety, runs, console)
 - [x] Phase 6 — Response contract validation and test reporting
 - [x] Phase 7 — Coverage and missing-scenario analysis
-- [ ] AI (Ollama via Spring AI)
+- [x] Phase 8 — Local AI with Ollama (suggestions, explanations, evaluation)
 - [ ] Hardening and release (Dockerfiles, nginx, full Compose, Playwright E2E in CI)
 
 ## Completion definition tracker
@@ -87,8 +94,8 @@
 | Real tests generated and executed against an authorized test API | ✅ Phase 5 (Warehouse Lab sample: 128 tests executed) |
 | Contract validation produces explainable results | ✅ Phase 6 (path, expected, actual and message per finding; verified against deliberate violations) |
 | Test history and coverage persist | ✅ Runs, results and assertions persist (Phases 5–6); coverage is computed from them, with snapshots across versions (Phase 7) |
-| AI suggestions and explanations work through a local model | ☐ |
-| AI outages do not break deterministic testing | ☐ |
+| AI suggestions and explanations work through a local model | ✅ Phase 8 (`qwen2.5:7b`, evaluated with `llama3.2:3b` too) |
+| AI outages do not break deterministic testing | ✅ Phase 8 (verified with Ollama stopped) |
 | Auth, authorization and outbound safeguards tested | ✅ incl. 168 outbound security tests and execution ITs |
 | Automated tests and CI pass | ◐ Local runs pass; GitHub CI not yet run |
 | Docker-based local setup works | ◐ PostgreSQL only |

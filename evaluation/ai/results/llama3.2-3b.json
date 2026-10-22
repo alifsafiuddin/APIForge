@@ -1,0 +1,1466 @@
+{
+  "summary": {
+    "label": "llama3.2-3b",
+    "model": "llama3.2:3b",
+    "when": "2026-10-22T01:39:03.235Z",
+    "run": {
+      "total": 128,
+      "passed": 115,
+      "failed": 13,
+      "inconclusive": 0,
+      "error": 0,
+      "skipped": 0
+    },
+    "explanations": {
+      "cases": 10,
+      "validStructuredOutput": 10,
+      "meanRelevance": 0.97,
+      "fullyRelevant": 9,
+      "factsVerified": 34,
+      "factsCheckable": 34,
+      "factsTotal": 93,
+      "codeClaims": 1,
+      "latencyMs": {
+        "p50": 5250,
+        "p95": 7904,
+        "max": 7904
+      }
+    },
+    "suggestions": {
+      "operations": 7,
+      "validStructuredOutput": 7,
+      "created": 13,
+      "discardedDuplicate": 12,
+      "discardedInvalid": 12,
+      "discardedOther": 10,
+      "overlapsWithReason": 0,
+      "possibleDuplicates": 1,
+      "undocumentedInputs": 0,
+      "undocumentedStatuses": 0,
+      "retried": 0,
+      "latencyMs": {
+        "p50": 8056,
+        "p95": 14678,
+        "max": 14678
+      }
+    }
+  },
+  "explanations": [
+    {
+      "id": "health-status-enum",
+      "httpStatus": 200,
+      "latencyMs": 7904,
+      "model": "llama3.2:3b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 7,
+      "factsVerified": 3,
+      "factsCheckable": 3,
+      "causes": 1,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16141-2b3f-740d-a420-440eb8f72793",
+        "resultId": "01a16141-069f-7d7d-ae14-713d5c29e016",
+        "model": "llama3.2:3b",
+        "latencyMs": 7850,
+        "createdAt": "2026-10-22T01:37:03.294746400Z",
+        "summary": "Failed test result",
+        "observedFacts": [
+          {
+            "statement": "Test failed with outcome FAILED",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Request method is GET",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Request path is /health",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Response status is 200",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "Response body contains \"status\":\"DEGRADED\"",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "BODY_SCHEMA assertion failed with message \"$.status value is not one of the allowed values.\"",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "Expected response body schema matches documented inline schema",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "API implementation does not validate the response body against the expected schema",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "BODY_SCHEMA assertion failed with message \"$.status value is not one of the allowed values.\"",
+                "grounding": "VERIFIED"
+              },
+              {
+                "text": "Expected response body schema matches documented inline schema",
+                "grounding": "NOT_CHECKABLE"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Verify the API implementation's response body validation logic",
+          "Check the API documentation for the expected response body schema",
+          "Use a tool like Postman or curl to test the API with a valid request body"
+        ],
+        "suggestedChanges": [
+          {
+            "target": "TEST",
+            "change": "Update the test to expect the response body to match the documented inline schema"
+          },
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Implement response body validation against the expected schema"
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "products-legacy-item",
+      "httpStatus": 200,
+      "latencyMs": 6435,
+      "model": "llama3.2:3b",
+      "relevance": 0.75,
+      "missing": [
+        "widthCm|minimum"
+      ],
+      "facts": 10,
+      "factsVerified": 4,
+      "factsCheckable": 4,
+      "causes": 2,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16141-446a-7a1a-ab4a-0a45a0111828",
+        "resultId": "01a16141-06ab-7feb-8fa2-1e51c010ab7f",
+        "model": "llama3.2:3b",
+        "latencyMs": 6401,
+        "createdAt": "2026-10-22T01:37:09.738122100Z",
+        "summary": "Failed test result",
+        "observedFacts": [
+          {
+            "statement": "The test failed with outcome FAILED.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The request was a GET to /products.",
+            "source": "REQUEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The response status code was 200.",
+            "source": "RESPONSE",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The response body matched the schema ProductPage.",
+            "source": "RESPONSE",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The assertion BODY_SCHEMA failed with result FAIL.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The assertion BODY_SCHEMA failed on path $.items[0].price.",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The assertion BODY_SCHEMA failed with expected value number but found string \"19.90\".",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The assertion BODY_SCHEMA failed with expected value ≥ 0.1 but found -1.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The assertion BODY_SCHEMA failed with expected format date-time but found string \"last spring\".",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The assertion BODY_SCHEMA failed on 3 of 4 assertions.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "The implementation does not validate the price field correctly.",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "The assertion BODY_SCHEMA failed with expected value number but found string \"19.90\".",
+                "grounding": "VERIFIED"
+              },
+              {
+                "text": "The assertion BODY_SCHEMA failed with expected value ≥ 0.1 but found -1.",
+                "grounding": "NOT_CHECKABLE"
+              }
+            ]
+          },
+          {
+            "hypothesis": "The implementation does not validate the createdAt field correctly.",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "The assertion BODY_SCHEMA failed with expected format date-time but found string \"last spring\".",
+                "grounding": "VERIFIED"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Verify the implementation of the price and createdAt fields in the ProductPage schema.",
+          "Check the validation logic in the API implementation for these fields.",
+          "Verify that the assertions in the test are correct."
+        ],
+        "suggestedChanges": [
+          {
+            "target": "TEST",
+            "change": "Update the test to expect a different response for invalid price or createdAt values."
+          },
+          {
+            "target": "SPECIFICATION",
+            "change": "Review the ProductPage schema to ensure it correctly defines the validation rules for the price and createdAt fields."
+          },
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Review the validation logic in the API implementation to ensure it correctly validates the price and createdAt fields."
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "product-missing-sku",
+      "httpStatus": 200,
+      "latencyMs": 5402,
+      "model": "llama3.2:3b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 10,
+      "factsVerified": 3,
+      "factsCheckable": 3,
+      "causes": 2,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16141-598a-761c-838d-0e62e6fab302",
+        "resultId": "01a16141-074d-7966-9aa8-78f72810e023",
+        "model": "llama3.2:3b",
+        "latencyMs": 5355,
+        "createdAt": "2026-10-22T01:37:15.146382Z",
+        "summary": "Failed test result",
+        "observedFacts": [
+          {
+            "statement": "Test failed with outcome FAILED",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Request method is GET",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Request path is /products/42",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Response status is 200",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "Response body is missing required property 'sku'",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Response body schema is Product",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Request headers are empty",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Contract operation is GET /products/{productId}",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Documented responses include 200 with Product schema",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "Documented responses include 401 with Error schema",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "Missing or invalid API key",
+            "confidence": "LOW",
+            "evidence": [
+              {
+                "text": "Request headers are empty",
+                "grounding": "NOT_CHECKABLE"
+              }
+            ]
+          },
+          {
+            "hypothesis": "Resource not found",
+            "confidence": "LOW",
+            "evidence": [
+              {
+                "text": "Response status is 404",
+                "grounding": "VERIFIED"
+              },
+              {
+                "text": "Request path is /products/42",
+                "grounding": "NOT_CHECKABLE"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Check request headers for API key",
+          "Verify resource existence at /products/42",
+          "Check response body for missing 'sku' property"
+        ],
+        "suggestedChanges": [
+          {
+            "target": "TEST",
+            "change": "Add API key to request headers"
+          },
+          {
+            "target": "SPECIFICATION",
+            "change": "Update documented responses to include 404 status for non-existent resources"
+          },
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Implement schema validation for 'sku' property in response body"
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "patch-content-type",
+      "httpStatus": 200,
+      "latencyMs": 5250,
+      "model": "llama3.2:3b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 10,
+      "factsVerified": 3,
+      "factsCheckable": 3,
+      "causes": 1,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16141-6e0c-731c-abdc-14515c8c7069",
+        "resultId": "01a16141-0788-78cf-8407-bba9b462391f",
+        "model": "llama3.2:3b",
+        "latencyMs": 5224,
+        "createdAt": "2026-10-22T01:37:20.395666700Z",
+        "summary": "Failed test result",
+        "observedFacts": [
+          {
+            "statement": "The test passed the happy path with a 200 status code.",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The response body did not match the expected schema Product.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The Content-Type header in the response was text/plain.",
+            "source": "RESPONSE",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The Content-Type header in the request was application/merge-patch+json.",
+            "source": "REQUEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The request was validated as valid.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The test expected a success response with a 200 status code.",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The response status code was 200.",
+            "source": "RESPONSE",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The response body was not empty.",
+            "source": "RESPONSE",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The response body was not null.",
+            "source": "RESPONSE",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The response body was not undefined.",
+            "source": "RESPONSE",
+            "grounding": "NOT_CHECKABLE"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "The API implementation does not document the Content-Type header for the 200 status code.",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "The response Content-Type header was text/plain.",
+                "grounding": "NOT_CHECKABLE"
+              },
+              {
+                "text": "The expected Content-Type header was application/json.",
+                "grounding": "NOT_CHECKABLE"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Verify the API documentation for the 200 status code.",
+          "Check the Content-Type header in the response.",
+          "Check the Content-Type header in the request.",
+          "Verify that the request was validated as valid."
+        ],
+        "suggestedChanges": [
+          {
+            "target": "TEST",
+            "change": "Update the test to expect a Content-Type header of application/json for the 200 status code."
+          },
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Document the Content-Type header for the 200 status code in the API documentation."
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "delete-returns-200",
+      "httpStatus": 200,
+      "latencyMs": 5107,
+      "model": "llama3.2:3b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 9,
+      "factsVerified": 5,
+      "factsCheckable": 5,
+      "causes": 1,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16141-81f5-795f-889e-030b99f6ccb3",
+        "resultId": "01a16141-065b-7816-af5f-4c7fd33b56fe",
+        "model": "llama3.2:3b",
+        "latencyMs": 5072,
+        "createdAt": "2026-10-22T01:37:25.493585800Z",
+        "summary": "Failed test result",
+        "observedFacts": [
+          {
+            "statement": "Test failed with outcome FAILED",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Request method was DELETE",
+            "source": "REQUEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Request path was /products/42",
+            "source": "REQUEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Response status was 200",
+            "source": "RESPONSE",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "Response body contained deleted:42",
+            "source": "RESPONSE",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Documented responses do not include status 200",
+            "source": "SCHEMA",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "Documented responses include status 204",
+            "source": "SCHEMA",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "Documented responses include status 401",
+            "source": "SCHEMA",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "Documented responses include status 404",
+            "source": "SCHEMA",
+            "grounding": "VERIFIED"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "The API implementation returns a success response with status 200 instead of 204",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "Response status was 200",
+                "grounding": "VERIFIED"
+              },
+              {
+                "text": "Response body contained deleted:42",
+                "grounding": "NOT_CHECKABLE"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Check the API implementation for the /products/{productId} endpoint",
+          "Verify that the response with status 200 is correctly handled",
+          "Check the documentation for the /products/{productId} endpoint for the expected response status"
+        ],
+        "suggestedChanges": [
+          {
+            "target": "TEST",
+            "change": "Update the test to expect a response with status 200, and verify that the response body contains the expected data"
+          },
+          {
+            "target": "SPECIFICATION",
+            "change": "Update the specification to include the expected response status for the /products/{productId} endpoint"
+          },
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Update the API implementation to return a success response with status 204 for the /products/{productId} endpoint"
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "order-status-lost",
+      "httpStatus": 200,
+      "latencyMs": 5558,
+      "model": "llama3.2:3b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 10,
+      "factsVerified": 4,
+      "factsCheckable": 4,
+      "causes": 1,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16141-97b5-722d-9d93-1ef13f31fa2b",
+        "resultId": "01a16141-086a-7b14-aa9d-3fadf02c1812",
+        "model": "llama3.2:3b",
+        "latencyMs": 5531,
+        "createdAt": "2026-10-22T01:37:31.061136200Z",
+        "summary": "Failed test result",
+        "observedFacts": [
+          {
+            "statement": "The test failed with outcome FAILED.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The failed assertion is BODY_SCHEMA with result FAIL.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The actual value of $.status is \"lost\".",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The expected value of $.status is one of accepted, packed, shipped.",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The request method is POST.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The request path is /orders.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The response status is 201.",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The response content type is application/json.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The response body contains the expected fields.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The response body contains the expected fields, but with a different value for $.status.",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "The API implementation does not validate the $.status field correctly.",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "The actual value of $.status is \"lost\", which is not one of the expected values.",
+                "grounding": "VERIFIED"
+              },
+              {
+                "text": "The expected value of $.status is one of accepted, packed, shipped.",
+                "grounding": "VERIFIED"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Check the API implementation for the validation of the $.status field.",
+          "Verify that the expected values for $.status are correctly defined in the schema.",
+          "Check the request and response data to ensure that the $.status field is correctly populated."
+        ],
+        "suggestedChanges": [
+          {
+            "target": "TEST",
+            "change": "Update the expected value of $.status to include \"lost\"."
+          },
+          {
+            "target": "SPECIFICATION",
+            "change": "Review the schema for the validation of the $.status field."
+          },
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Update the API implementation to correctly validate the $.status field."
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "order-quantity-maximum",
+      "httpStatus": 200,
+      "latencyMs": 5690,
+      "model": "llama3.2:3b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 9,
+      "factsVerified": 6,
+      "factsCheckable": 6,
+      "causes": 1,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16141-adee-70e0-944d-87abb81d79f3",
+        "resultId": "01a16141-093a-71f0-8d25-5375d9ddb690",
+        "model": "llama3.2:3b",
+        "latencyMs": 5659,
+        "createdAt": "2026-10-22T01:37:36.750054700Z",
+        "summary": "Test failed with unexpected response status 201 instead of expected 400.",
+        "observedFacts": [
+          {
+            "statement": "The test expects 400, but the response is 201.",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The response body must match schema Error (400, application/json).",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The response body contains a quantity of 1000, which exceeds the maximum value of 999.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The response status is 201.",
+            "source": "RESPONSE",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The response content type is application/json.",
+            "source": "RESPONSE",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "The response body contains an id field with a value of \"2361bfe1-6181-4430-9034-55e850e756c8\".",
+            "source": "RESPONSE",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The response body contains a status field with a value of \"accepted\".",
+            "source": "RESPONSE",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The response body contains a sizeBytes field with a value of 286.",
+            "source": "RESPONSE",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "The response body contains a durationMs field with a value of 1.",
+            "source": "RESPONSE",
+            "grounding": "NOT_CHECKABLE"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "The API implementation does not validate the quantity field correctly.",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "The response body contains a quantity of 1000, which exceeds the maximum value of 999.",
+                "grounding": "NOT_CHECKABLE"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Verify the API implementation for the quantity field validation.",
+          "Check the API documentation for the expected validation behavior.",
+          "Use a tool like Postman or cURL to test the API with a valid and invalid quantity value."
+        ],
+        "suggestedChanges": [
+          {
+            "target": "TEST",
+            "change": "Update the test to expect a 400 status code instead of 201."
+          },
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Implement correct validation for the quantity field in the API implementation."
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "console-timeout",
+      "httpStatus": 200,
+      "latencyMs": 4154,
+      "model": "llama3.2:3b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 8,
+      "factsVerified": 0,
+      "factsCheckable": 0,
+      "causes": 1,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16141-c259-7670-b952-840a7d97a152",
+        "resultId": "01a16141-b21a-7395-8c9b-798202d8ae81",
+        "model": "llama3.2:3b",
+        "latencyMs": 4127,
+        "createdAt": "2026-10-22T01:37:41.977402500Z",
+        "summary": "Failed test result",
+        "observedFacts": [
+          {
+            "statement": "Test failed with outcome ERROR",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Transport error with message No response data within the read timeout of 1000 ms.",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Expected status codes 2XX",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Request method GET",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Request path /lab/slow?ms=3000",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Request headers empty",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Request authentication ENVIRONMENT",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Response data missing within 1000 ms",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "Request not received within 1000 ms",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "TransportError message: No response data within the read timeout of 1000 ms.",
+                "grounding": "NOT_CHECKABLE"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Check server logs for request timing and response data",
+          "Verify server configuration and timeout settings",
+          "Check network connectivity and request latency"
+        ],
+        "suggestedChanges": [
+          {
+            "target": "TEST",
+            "change": "Increase request timeout or adjust server configuration"
+          },
+          {
+            "target": "SPECIFICATION",
+            "change": "Review read timeout and request latency requirements"
+          },
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Implement request timeout handling and response data buffering"
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    },
+    {
+      "id": "console-malformed-json",
+      "httpStatus": 200,
+      "latencyMs": 4746,
+      "model": "llama3.2:3b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 10,
+      "factsVerified": 2,
+      "factsCheckable": 2,
+      "causes": 1,
+      "codeClaim": true,
+      "explanation": {
+        "id": "01a16141-d518-736f-9b2d-79d99234fa18",
+        "resultId": "01a16141-c28a-7328-abe1-59f57c0a675c",
+        "model": "llama3.2:3b",
+        "latencyMs": 4720,
+        "createdAt": "2026-10-22T01:37:46.776214700Z",
+        "summary": "Failed test result",
+        "observedFacts": [
+          {
+            "statement": "Test name: Ad hoc GET /lab/malformed",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Test outcome: FAILED",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Failed assertion: JSON_SYNTAX",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Failed assertion: JSON_SYNTAX - expected valid JSON, actual malformed JSON",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Failed assertion: JSON_SYNTAX - error message: The body is not valid JSON at line 1, column 17",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Response status: 200",
+            "source": "RESPONSE",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "Response content type: application/json",
+            "source": "RESPONSE",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Response headers: Content-Type: application/json",
+            "source": "RESPONSE",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Response body: {\"items\": [1, 2,",
+            "source": "RESPONSE",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "Request method: GET",
+            "source": "REQUEST",
+            "grounding": "NOT_CHECKABLE"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "Malformed JSON in response body",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "JSON_SYNTAX - expected valid JSON, actual malformed JSON",
+                "grounding": "NOT_CHECKABLE"
+              },
+              {
+                "text": "Response body: {\"items\": [1, 2,",
+                "grounding": "VERIFIED"
+              },
+              {
+                "text": "The body is not valid JSON at line 1, column 17",
+                "grounding": "NOT_CHECKABLE"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Verify response body JSON syntax",
+          "Check API implementation for malformed JSON handling"
+        ],
+        "suggestedChanges": [
+          {
+            "target": "TEST",
+            "change": "Add more specific error messages for malformed JSON"
+          },
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Validate response body JSON syntax"
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": [
+          "The answer claims or implies access to source code, which the model was never given. Treat such statements as guesses."
+        ]
+      }
+    },
+    {
+      "id": "console-status-503",
+      "httpStatus": 200,
+      "latencyMs": 5168,
+      "model": "llama3.2:3b",
+      "relevance": 1,
+      "missing": [],
+      "facts": 10,
+      "factsVerified": 4,
+      "factsCheckable": 4,
+      "causes": 1,
+      "codeClaim": false,
+      "explanation": {
+        "id": "01a16141-e97a-7448-919e-8ed5d4825489",
+        "resultId": "01a16141-d54a-707c-8bdb-e328fbe85baf",
+        "model": "llama3.2:3b",
+        "latencyMs": 5139,
+        "createdAt": "2026-10-22T01:37:51.994267600Z",
+        "summary": "Failed test result",
+        "observedFacts": [
+          {
+            "statement": "Test name: Ad hoc GET /lab/status/503",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "Test outcome: FAILED",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Failed assertion: STATUS",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Expected status: 2XX",
+            "source": "TEST",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Actual status: 503",
+            "source": "TEST",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "Response status: 503",
+            "source": "RESPONSE",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "Response content type: application/json",
+            "source": "RESPONSE",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Response headers: Content-Type: application/json",
+            "source": "RESPONSE",
+            "grounding": "NOT_CHECKABLE"
+          },
+          {
+            "statement": "Response body: {\"code\":\"STATUS\",\"message\":\"Status 503 on request\"}",
+            "source": "RESPONSE",
+            "grounding": "VERIFIED"
+          },
+          {
+            "statement": "Request method: GET",
+            "source": "REQUEST",
+            "grounding": "NOT_CHECKABLE"
+          }
+        ],
+        "likelyCauses": [
+          {
+            "hypothesis": "The API implementation returns a 503 status code when the requested resource is unavailable.",
+            "confidence": "MEDIUM",
+            "evidence": [
+              {
+                "text": "JSON path: $response['status'] == 503",
+                "grounding": "VERIFIED"
+              }
+            ]
+          }
+        ],
+        "debuggingSteps": [
+          "Verify the API implementation returns a 2XX status code for available resources.",
+          "Check the API documentation for the expected behavior when a resource is unavailable.",
+          "Inspect the response body and headers to ensure they match the expected format."
+        ],
+        "suggestedChanges": [
+          {
+            "target": "TEST",
+            "change": "Update the expected status code in the test to 503."
+          },
+          {
+            "target": "SPECIFICATION",
+            "change": "Add a section for error handling, including the expected status code and response format."
+          },
+          {
+            "target": "API_IMPLEMENTATION",
+            "change": "Implement the expected behavior for unavailable resources, including a 503 status code and a specific response format."
+          }
+        ],
+        "inputs": [
+          "failed and inconclusive assertions with expected and actual values",
+          "the test's name, rationale and expected statuses",
+          "the request: method, path, test headers and body (redacted, no host)",
+          "the response: status, content type, safe headers and a sanitized body excerpt",
+          "the operation's documented responses and their schemas"
+        ],
+        "sourceCodeProvided": false,
+        "warnings": []
+      }
+    }
+  ],
+  "suggestions": [
+    {
+      "operationKey": "GET /health",
+      "httpStatus": 200,
+      "latencyMs": 1807,
+      "model": "llama3.2:3b",
+      "attempts": 1,
+      "created": 0,
+      "discardedDuplicate": 0,
+      "discardedInvalid": 1,
+      "discardedOther": 0,
+      "overlapsWithReason": 0,
+      "possibleDuplicates": 0,
+      "undocumentedInputs": 0,
+      "undocumentedStatuses": 0,
+      "names": [],
+      "discarded": [
+        {
+          "name": "Invalid path",
+          "reason": "Not a valid test: The test definition is invalid. (request.pathParams.health: must be a string, number or boolean)"
+        }
+      ]
+    },
+    {
+      "operationKey": "GET /products",
+      "httpStatus": 200,
+      "latencyMs": 6230,
+      "model": "llama3.2:3b",
+      "attempts": 1,
+      "created": 2,
+      "discardedDuplicate": 3,
+      "discardedInvalid": 0,
+      "discardedOther": 0,
+      "overlapsWithReason": 0,
+      "possibleDuplicates": 0,
+      "undocumentedInputs": 0,
+      "undocumentedStatuses": 0,
+      "names": [
+        "Missing required query parameter 'category'",
+        "Query parameter 'q' at minLength 2"
+      ],
+      "discarded": [
+        {
+          "name": "Missing required header parameter 'X-Request-Id'",
+          "reason": "Same as the suggestion “Missing required query parameter 'category'”."
+        },
+        {
+          "name": "Query parameter 'q' at maxLength 50",
+          "reason": "Same as the suggestion “Missing required query parameter 'category'”."
+        },
+        {
+          "name": "Query parameter 'q' longer than maxLength 50",
+          "reason": "Same as the suggestion “Missing required query parameter 'category'”."
+        }
+      ]
+    },
+    {
+      "operationKey": "POST /products",
+      "httpStatus": 200,
+      "latencyMs": 13451,
+      "model": "llama3.2:3b",
+      "attempts": 1,
+      "created": 5,
+      "discardedDuplicate": 0,
+      "discardedInvalid": 0,
+      "discardedOther": 5,
+      "overlapsWithReason": 0,
+      "possibleDuplicates": 1,
+      "undocumentedInputs": 0,
+      "undocumentedStatuses": 0,
+      "names": [
+        "Empty request body",
+        "Invalid format for 'discontinuedAt' field",
+        "Missing required field 'widthCm'",
+        "Field 'price' at exclusive minimum 0",
+        "Field 'stock' at maximum 10000"
+      ],
+      "discarded": [
+        {
+          "name": "Field 'tags' with exactly maxItems 5",
+          "reason": "More than the 5 suggestions asked for."
+        },
+        {
+          "name": "Field 'tags' with more than maxItems 5",
+          "reason": "More than the 5 suggestions asked for."
+        },
+        {
+          "name": "Field 'tags' with exactly maxItems 5",
+          "reason": "More than the 5 suggestions asked for."
+        },
+        {
+          "name": "Field 'tags' with more than maxItems 5",
+          "reason": "More than the 5 suggestions asked for."
+        },
+        {
+          "name": "Field 'tags' with exactly maxItems 5",
+          "reason": "More than the 5 suggestions asked for."
+        }
+      ]
+    },
+    {
+      "operationKey": "GET /products/{productId}",
+      "httpStatus": 200,
+      "latencyMs": 13020,
+      "model": "llama3.2:3b",
+      "attempts": 1,
+      "created": 1,
+      "discardedDuplicate": 9,
+      "discardedInvalid": 0,
+      "discardedOther": 0,
+      "overlapsWithReason": 0,
+      "possibleDuplicates": 0,
+      "undocumentedInputs": 0,
+      "undocumentedStatuses": 0,
+      "names": [
+        "Request with invalid path parameter 'productId' (non-integer)"
+      ],
+      "discarded": [
+        {
+          "name": "Request with invalid path parameter 'productId' (non-integer)",
+          "reason": "Same as the suggestion “Request with invalid path parameter 'productId' (non-integer)”."
+        },
+        {
+          "name": "Request with invalid path parameter 'productId' (non-integer)",
+          "reason": "Same as the suggestion “Request with invalid path parameter 'productId' (non-integer)”."
+        },
+        {
+          "name": "Request with invalid path parameter 'productId' (non-integer)",
+          "reason": "Same as the suggestion “Request with invalid path parameter 'productId' (non-integer)”."
+        },
+        {
+          "name": "Request with invalid path parameter 'productId' (non-integer)",
+          "reason": "Same as the suggestion “Request with invalid path parameter 'productId' (non-integer)”."
+        },
+        {
+          "name": "Request with invalid path parameter 'productId' (non-integer)",
+          "reason": "Same as the suggestion “Request with invalid path parameter 'productId' (non-integer)”."
+        },
+        {
+          "name": "Request with invalid path parameter 'productId' (non-integer)",
+          "reason": "Same as the suggestion “Request with invalid path parameter 'productId' (non-integer)”."
+        },
+        {
+          "name": "Request with invalid path parameter 'productId' (non-integer)",
+          "reason": "Same as the suggestion “Request with invalid path parameter 'productId' (non-integer)”."
+        },
+        {
+          "name": "Request with invalid path parameter 'productId' (non-integer)",
+          "reason": "Same as the suggestion “Request with invalid path parameter 'productId' (non-integer)”."
+        },
+        {
+          "name": "Request with invalid path parameter 'productId' (non-integer)",
+          "reason": "Same as the suggestion “Request with invalid path parameter 'productId' (non-integer)”."
+        }
+      ]
+    },
+    {
+      "operationKey": "PATCH /products/{productId}",
+      "httpStatus": 200,
+      "latencyMs": 8056,
+      "model": "llama3.2:3b",
+      "attempts": 1,
+      "created": 0,
+      "discardedDuplicate": 0,
+      "discardedInvalid": 5,
+      "discardedOther": 0,
+      "overlapsWithReason": 0,
+      "possibleDuplicates": 0,
+      "undocumentedInputs": 0,
+      "undocumentedStatuses": 0,
+      "names": [],
+      "discarded": [
+        {
+          "name": "Missing path parameter 'productId'",
+          "reason": "Not a valid test: The test definition is invalid. (request.pathParams: must set exactly the path parameters productId)"
+        },
+        {
+          "name": "Path parameter 'productId' below minimum 1",
+          "reason": "Not a valid test: The test definition is invalid. (request.pathParams: must set exactly the path parameters productId)"
+        },
+        {
+          "name": "Field 'name' at minLength 3",
+          "reason": "Not a valid test: The test definition is invalid. (request.pathParams: must set exactly the path parameters productId)"
+        },
+        {
+          "name": "Field 'stock' below minimum 0",
+          "reason": "Not a valid test: The test definition is invalid. (request.pathParams: must set exactly the path parameters productId)"
+        },
+        {
+          "name": "Field 'price' equal to exclusive minimum 0",
+          "reason": "Not a valid test: The test definition is invalid. (request.pathParams: must set exactly the path parameters productId)"
+        }
+      ]
+    },
+    {
+      "operationKey": "DELETE /products/{productId}",
+      "httpStatus": 200,
+      "latencyMs": 7300,
+      "model": "llama3.2:3b",
+      "attempts": 1,
+      "created": 0,
+      "discardedDuplicate": 0,
+      "discardedInvalid": 6,
+      "discardedOther": 0,
+      "overlapsWithReason": 0,
+      "possibleDuplicates": 0,
+      "undocumentedInputs": 0,
+      "undocumentedStatuses": 0,
+      "names": [],
+      "discarded": [
+        {
+          "name": "Missing path parameter 'productId'",
+          "reason": "Not a valid test: The test definition is invalid. (request.pathParams: must set exactly the path parameters productId)"
+        },
+        {
+          "name": "Path parameter 'productId' below minimum 1",
+          "reason": "Not a valid test: The test definition is invalid. (request.pathParams: must set exactly the path parameters productId)"
+        },
+        {
+          "name": "Path parameter 'productId' at minimum 1",
+          "reason": "Not a valid test: The test definition is invalid. (request.pathParams: must set exactly the path parameters productId)"
+        },
+        {
+          "name": "Path parameter 'productId' with maximum 2147483647",
+          "reason": "Not a valid test: The test definition is invalid. (request.pathParams: must set exactly the path parameters productId)"
+        },
+        {
+          "name": "Path parameter 'productId' with maximum 4294967295",
+          "reason": "Not a valid test: The test definition is invalid. (request.pathParams: must set exactly the path parameters productId)"
+        },
+        {
+          "name": "Path parameter 'productId' with format 'int64'",
+          "reason": "Not a valid test: The test definition is invalid. (request.pathParams: must set exactly the path parameters productId)"
+        }
+      ]
+    },
+    {
+      "operationKey": "POST /orders",
+      "httpStatus": 200,
+      "latencyMs": 14678,
+      "model": "llama3.2:3b",
+      "attempts": 1,
+      "created": 5,
+      "discardedDuplicate": 0,
+      "discardedInvalid": 0,
+      "discardedOther": 5,
+      "overlapsWithReason": 0,
+      "possibleDuplicates": 0,
+      "undocumentedInputs": 0,
+      "undocumentedStatuses": 0,
+      "names": [
+        "Missing required field 'delivery'",
+        "Field 'lines' with more than maxItems 20",
+        "Field 'lines' with fewer than minItems 1",
+        "Wrong type for field 'express' (string instead of boolean)",
+        "Wrong type for field 'couponCode' (number instead of string)"
+      ],
+      "discarded": [
+        {
+          "name": "Field 'lines' with exactly maxItems 20",
+          "reason": "More than the 5 suggestions asked for."
+        },
+        {
+          "name": "Missing required field 'lines[0].productId'",
+          "reason": "More than the 5 suggestions asked for."
+        },
+        {
+          "name": "Wrong type for field 'lines[0].productId' (string instead of integer)",
+          "reason": "More than the 5 suggestions asked for."
+        },
+        {
+          "name": "Field 'lines[0].productId' below minimum 1",
+          "reason": "More than the 5 suggestions asked for."
+        },
+        {
+          "name": "Missing required field 'lines[0].quantity'",
+          "reason": "More than the 5 suggestions asked for."
+        }
+      ]
+    }
+  ]
+}

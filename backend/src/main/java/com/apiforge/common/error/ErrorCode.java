@@ -28,7 +28,14 @@ public enum ErrorCode {
     UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR),
-    SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE);
+    SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE),
+    /** Local AI is turned off or Ollama cannot be reached. Everything except AI keeps working. */
+    AI_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE),
+    AI_MODEL_NOT_FOUND(HttpStatus.SERVICE_UNAVAILABLE),
+    AI_BUSY(HttpStatus.SERVICE_UNAVAILABLE),
+    AI_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT),
+    /** The model's answer was not valid structured output (after the bounded retry). */
+    AI_INVALID_OUTPUT(HttpStatus.BAD_GATEWAY);
 
     private final HttpStatus status;
 

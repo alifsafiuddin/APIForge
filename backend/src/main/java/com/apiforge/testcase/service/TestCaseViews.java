@@ -38,17 +38,18 @@ public final class TestCaseViews {
             TestCase.Category category, TestCase.Origin origin, TestCase.ReviewStatus reviewStatus,
             TestCase.LifecycleStatus lifecycleStatus, TestCase.RiskLevel riskLevel, boolean enabled,
             boolean userModified, boolean executable, String scenarioKey, String specLocation, String rationale,
-            String generatorVersion, UUID sourceSpecificationVersionId, Map<String, Object> request,
+            String generatorVersion, String aiModel, UUID sourceSpecificationVersionId, Map<String, Object> request,
             Map<String, Object> expectations, UUID reviewedBy, Instant reviewedAt, Instant createdAt, Instant updatedAt,
             long version) {
 
-        static TestCaseDetail from(TestCase test) {
+        public static TestCaseDetail from(TestCase test) {
             String[] parts = split(test.getOperationKey());
             return new TestCaseDetail(test.getId(), test.getSuiteId(), test.getOperationKey(), parts[0], parts[1],
                     test.getName(), test.getCategory(), test.getOrigin(), test.getReviewStatus(),
                     test.getLifecycleStatus(), test.getRiskLevel(), test.isEnabled(), test.isUserModified(),
                     test.isExecutable(), test.getScenarioKey(), test.getSpecLocation(), test.getRationale(),
-                    test.getGeneratorVersion(), test.getSourceSpecificationVersionId(), test.getRequest().toMap(),
+                    test.getGeneratorVersion(), test.getAiModel(), test.getSourceSpecificationVersionId(),
+                    test.getRequest().toMap(),
                     test.getExpectationsValue().toMap(), test.getReviewedBy(), test.getReviewedAt(),
                     test.getCreatedAt(), test.getUpdatedAt(), test.getVersion());
         }

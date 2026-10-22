@@ -1,20 +1,15 @@
 package com.apiforge.coverage.service;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -62,9 +57,8 @@ import com.apiforge.spec.repository.ApiOperationRepository;
 import com.apiforge.spec.repository.SpecificationVersionRepository;
 import com.apiforge.testcase.domain.RequestTemplate;
 import com.apiforge.testcase.domain.TestCase;
+import com.apiforge.testcase.domain.TestFingerprint;
 import com.apiforge.testcase.repository.TestCaseRepository;
-
-import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Specification coverage of a project's active version (computed on demand, ADR-013) and the
@@ -75,7 +69,6 @@ import tools.jackson.databind.json.JsonMapper;
 public class CoverageService {
 
     private static final Logger log = LoggerFactory.getLogger(CoverageService.class);
-    private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final int HISTORY = 50;
     private static final int CACHED_VERSIONS = 20;
 
@@ -248,7 +241,7 @@ public class CoverageService {
                     ? SchemaBranches.exercised(request.body().value(), branches, validator) : Set.of();
             List<String> statuses = test.getExpectationsValue().statuses();
             tests.add(new TestInput(test.getId(), test.getOperationKey(), test.getName(), test.getScenarioKey(),
-                    test.isExecutable(), fingerprint(test.getOperationKey(), test.getRequestTemplate(), statuses), statuses,
+                    test.isExecutable(), TestFingerprint.of(test.getOperationKey(), test.getRequestTemplate(), statuses), statuses,
                     hit, test.getSortOrder()));
         }
 
@@ -294,37 +287,6 @@ public class CoverageService {
             }
         }
         return List.of();
-    }
-
-    /**
-     * Equal for tests of one operation that send the same request (path values, query, headers,
-     * body, authentication mode) and expect the same statuses, whatever their names.
-     */
-    static String fingerprint(String operationKey, Map<String, Object> request, List<String> statuses) {
-        Map<String, Object> identity = new TreeMap<>();
-        identity.put("operation", operationKey);
-        identity.put("request", canonical(request));
-        identity.put("statuses", statuses.stream().map(status -> status.toUpperCase(Locale.ROOT)).sorted().distinct().toList());
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(JSON.writeValueAsString(identity).getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("SHA-256 is required by the Java platform", ex);
-        }
-    }
-
-    /** Maps with sorted keys, recursively, so member order does not matter. */
-    private static Object canonical(Object value) {
-        if (value instanceof Map<?, ?> map) {
-            Map<String, Object> sorted = new TreeMap<>();
-            map.forEach((key, child) -> sorted.put(String.valueOf(key), canonical(child)));
-            return sorted;
-        }
-        if (value instanceof List<?> list) {
-            return list.stream().map(CoverageService::canonical).toList();
-        }
-        return value;
     }
 
     private static List<SpecificationDiff.Contract> contracts(List<ApiOperation> list) {

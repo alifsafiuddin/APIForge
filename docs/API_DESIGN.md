@@ -200,14 +200,16 @@ Tests are not hard-deleted through the API: disable a test to stop it from runni
 
 Metric definitions are part of the response and are documented in ADR-028. A cross-project dashboard endpoint was planned here and is not implemented.
 
-### 2.9 AI — later phase
+### 2.9 AI ✅ Phase 8
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/ai/status` | `{enabled, reachable, model, modelAvailable}` (cached for 30 s) |
-| POST | `/projects/{projectId}/ai/test-suggestions` | `{operationKey, maxSuggestions ≤ 10}`. Returns suggestions stored as `PENDING_REVIEW` tests, plus rejected suggestions with reasons. With AI unavailable → `200 {source: "UNAVAILABLE", suggestions: []}` with a message (deterministic generation is unaffected) |
-| POST | `/projects/{projectId}/executions/{executionId}/explanation` | Returns `{source: "AI" \| "DETERMINISTIC_FALLBACK", summary, hypotheses[], debuggingSteps[], suggestedChange, citations[]}` |
-| GET | `/projects/{projectId}/executions/{executionId}/explanations` | Previous explanations for this execution |
+| GET | `/ai/status?refresh=` | `{enabled, state: READY\|MODEL_MISSING\|UNAVAILABLE\|DISABLED, model, server, installedModels[], message, latencyMs, checkedAt}`; cached 10 s, `refresh=true` checks now |
+| POST | `/projects/{projectId}/ai/suggestions` | `{operationKey}` → `{operationKey, model, latencyMs, attempts, created: [test detail…], discarded: [{name, reason}], possibleDuplicates: [{name, similarTo, difference}]}`. Created tests are `AI_SUGGESTED`, `PENDING_REVIEW`, not executable; accept/reject with `POST /tests/{id}/review`, edit with `PUT /tests/{id}` |
+| POST | `/projects/{projectId}/runs/{runId}/results/{resultId}/explanation` | Explains a FAILED, ERROR or INCONCLUSIVE result (others → 409): `{id, resultId, model, latencyMs, createdAt, summary, observedFacts: [{statement, source, grounding}], likelyCauses: [{hypothesis, confidence, evidence: [{text, grounding}]}], debuggingSteps[], suggestedChanges: [{target: TEST\|SPECIFICATION\|API_IMPLEMENTATION, change}], inputs[], sourceCodeProvided: false, warnings[]}` |
+| GET | same path | The latest stored explanation, or 404 |
+
+AI errors: `AI_UNAVAILABLE` (503: disabled, not reachable or other Ollama error), `AI_MODEL_NOT_FOUND` (503), `AI_BUSY` (503), `AI_TIMEOUT` (504), `AI_INVALID_OUTPUT` (502), `PAYLOAD_TOO_LARGE` (413, prompt over the limit), `RATE_LIMITED` (429 with `retryAfterSeconds`). Each problem carries `aiFailure` with the classified kind. No other endpoint depends on AI.
 
 ### 2.10 Operational endpoints (Actuator)
 

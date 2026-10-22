@@ -75,6 +75,12 @@ class ArchitectureTest {
             .because("every request to a user-supplied destination must pass the outbound policy (docs/SECURITY.md section 6)");
 
     @ArchTest
+    static final ArchRule springAiIsConfinedToTheAiClient = noClasses()
+            .that().resideOutsideOfPackage("com.apiforge.ai.client..")
+            .should().dependOnClassesThat().resideInAnyPackage("org.springframework.ai..")
+            .because("model calls go through one gateway with explicit timeouts and bounded retries (ADR-029)");
+
+    @ArchTest
     static final ArchRule onlyTheSecretsModuleUsesCryptography = noClasses()
             .that().resideOutsideOfPackage("com.apiforge.secrets..")
             .should().dependOnClassesThat().resideInAPackage("javax.crypto..")
