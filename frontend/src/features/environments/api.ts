@@ -28,8 +28,6 @@ const variableSchema = z.object({
   hasValue: z.boolean(),
   updatedAt: z.string(),
 })
-export type Variable = z.infer<typeof variableSchema>
-
 export const environmentSchema = z.object({
   id: z.string(),
   name: z.string(),

@@ -2,6 +2,7 @@ package com.apiforge.common.error;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
@@ -157,9 +158,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> createResponseEntity(@Nullable Object body, HttpHeaders headers,
             HttpStatusCode statusCode, WebRequest request) {
-        if (body instanceof ProblemDetail problem
-                && (problem.getProperties() == null || !problem.getProperties().containsKey(Problems.CODE))) {
-            Problems.decorate(problem, ErrorCode.fromStatus(statusCode.value()), servletRequest(request));
+        if (body instanceof ProblemDetail problem) {
+            Map<String, Object> properties = problem.getProperties();
+            if (properties == null || !properties.containsKey(Problems.CODE)) {
+                Problems.decorate(problem, ErrorCode.fromStatus(statusCode.value()), servletRequest(request));
+            }
         }
         return super.createResponseEntity(body, headers, statusCode, request);
     }

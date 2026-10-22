@@ -109,6 +109,9 @@ public class AuthController {
     }
 
     private static UserResponse toResponse(Authentication authentication) {
-        return UserResponse.from((AuthenticatedUser) authentication.getPrincipal());
+        if (!(authentication.getPrincipal() instanceof AuthenticatedUser user)) {
+            throw new IllegalStateException("An authenticated session always has an AuthenticatedUser principal");
+        }
+        return UserResponse.from(user);
     }
 }

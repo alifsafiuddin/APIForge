@@ -1,10 +1,51 @@
 # Project Status
 
-**Current phase**: Phase 9 — Complete frontend and user experience — **complete** (2026-10-22)
+**Current phase**: Phase 10 — Automated testing and quality assurance — **complete** (2026-10-22)
 **Next phase**: decided by the next phase brief (planned: hardening and release)
-**Runnable today**: every workflow from sign-up to coverage in one consistent UI — dashboard and project overview with stored numbers, specification import and explorer, deterministic generation, a project-wide test finder and review queue, optional local AI, environments and secrets, runs (by endpoint, selection, suite or all), contract validation details, failure explanations, run history with filters and comparison, coverage, console, and account settings (profile, password, sign-out, account deletion).
+**Runnable today**: every workflow from sign-up to coverage, with optional local AI; now covered by 868 backend tests, 125 frontend tests and 11 end-to-end journeys, with patched dependencies and the QA results in [QA_REPORT.md](QA_REPORT.md).
 
-## Phase 9 summary
+## Phase 10 summary
+
+The full report — commands, outcomes, defects, security checks, limitations and checks not run — is [QA_REPORT.md](QA_REPORT.md).
+
+### Delivered
+
+| Requirement | Implementation |
+|---|---|
+| Backend unit, controller-contract, integration and Testcontainers tests | New: `ApiContractIntegrationTest` (HTTP contract of every error class and of created resources and pages), `SpecificationEdgeCasesIntegrationTest`, `EnvironmentRulesIntegrationTest` (incl. the previously untested environment deletion), `ExecutionRulesIntegrationTest`, `SchemaResolverTest`, `AllOfSynthesisTest`, `ClockConfigTest`; 816 → 868 tests |
+| Auth, authorization, SSRF, secret redaction, AI failure handling | Existing suites re-run; new `SecretLoggingIntegrationTest` proves the "never in logs" claim |
+| Frontend component, form-validation and API-error tests | New `ConsolePage.test.tsx`, `ErrorHandling.test.tsx`; 116 → 125 tests |
+| End-to-end tests of critical journeys | New `e2e/` Playwright project (strict type check): contract testing, authentication and sessions, outbound safety and confirmations, AI with and without Ollama, offline/unreachable states and mobile layout |
+| Static analysis, vulnerability checks | SpotBugs and knip (findings fixed or justified), OSV-Scanner on the backend SBOM, lockfiles and the PostgreSQL image, `npm audit` |
+| Logs, fake results, dead code, misleading text | Log and database reviews clean; no fake data; unused test starters and types removed; outdated docs corrected |
+| Warnings fixed, not suppressed | No suppression added; one attempted `@SuppressWarnings` was replaced by code that needs none |
+
+### Verification (executed 2026-10-22; Windows 11, Docker Desktop 29.9.1, Node 24.22.0, JDK 21.0.8, Ollama 0.40.8)
+
+| Check | Result |
+|---|---|
+| Backend, clean checkout (`mvnw verify`) | ✅ **868 tests, 0 failures, 0 errors, 0 skipped**; no compiler warnings; enforcer and architecture rules pass; lines 94.0% (6827/7266), branches 80.1% |
+| Frontend, clean checkout (`npm ci`, lint, typecheck, coverage, build, audit) | ✅ **125/125 tests**; 0 lint findings; lines 90.6%, branches 78.5%; build without warnings; 0 vulnerabilities |
+| **End-to-end**, against the clean-checkout jar | ✅ With Ollama: 10 passed, 1 skipped (no-AI journey). Ollama stopped: 10 passed, 1 skipped (AI journey). All 11 journeys pass in their mode |
+| Dependency vulnerabilities | ✅ backend SBOM, frontend and e2e lockfiles clean after the Tomcat and Jackson upgrades (were 17 findings, 3 critical); ⚠️ PostgreSQL image: upstream `gosu` findings only (none critical or high) |
+| Logs and stored data | ✅ no password, secret, token, cookie or e-mail in the logs of both e2e runs; no secret in results, explanations or audit events |
+
+### Defects found and fixed during this phase
+
+- **Tomcat 11.0.24 and Jackson 3.1.5/2.21.5** had known vulnerabilities (3 critical Tomcat advisories, 7 Jackson advisories); upgraded to 11.0.27, 3.1.7 and 2.21.7.
+- **Timestamps differed between a write and the next read** (100 ns clock vs microsecond `timestamptz`); the clock now has microsecond precision. The JDK's `Clock.tick` with sub-millisecond ticks throws in `millis()` — found when the first fix broke every request in tests.
+- Possible null dereferences, a vacuous `instanceof`, entity getters exposing persisted maps (SpotBugs).
+- Console JSON errors did not name the field; secret-set audit events lacked their action.
+- Four unused test starters, ten unused TypeScript types; outdated statements in TESTING, ARCHITECTURE, DEPLOYMENT, SECURITY and ADR-018, documented-but-unread and read-but-undocumented environment variables.
+
+### Known limitations
+
+- End-to-end tests run locally, not in CI (they need the whole stack); Chromium-based Edge only.
+- The official PostgreSQL image's `gosu` helper carries Go advisories that only the upstream image can fix.
+- The Tomcat and Jackson overrides must be removed once Spring Boot manages these versions.
+- GitHub CI status for this branch is checked by the user.
+
+## Phase 9 summary (previous phase)
 
 ### Delivered
 
@@ -54,59 +95,9 @@
 - Dark mode follows the operating system (no in-app switch); its colours were not checked with axe in the walkthrough.
 - GitHub CI status for this branch is checked by the user.
 
-## Phase 8 summary (previous phase)
-
-### Delivered
-
-| Requirement | Implementation | Where |
-|---|---|---|
-| Ollama with a compatible stable Spring AI release | Spring AI 2.0.1 (`spring-ai-ollama`, through `OllamaApi`) on Spring Boot 4.1.1; dependency convergence passes (antlr aligned to 4.13.2); confined to one gateway by ArchUnit | `ai/client/OllamaGateway`, ADR-029 |
-| Useful without AI | No deterministic feature calls the model; AI errors are 503/504/502 with the reason; UI disables AI actions with the reason | verified offline (completion check) |
-| A. Suggestions: description, schema, inventory, sanitized examples; uncovered scenarios | Prompt: operation, parameters, body and responses with schemas inlined (examples sanitized), existing tests (names, categories, scenarios, statuses), scenarios the generator could not build | `TestSuggestionService` |
-| Strict JSON DTO, all suggestions validated, review before accepting, no code, no unexplained duplicates | One schema for Ollama `format` and validation; strict binding; each suggestion validated like a manual edit; identical to an existing test → discarded unless a reason is given; one differing value → flagged; stored `PENDING_REVIEW`, not executable; Accept / Edit / Reject | `StructuredOutput`, `AiSuggestionsPanel` |
-| B. Explanation: assertion, expected/actual, schema, status, sanitized context; summary, causes, evidence, steps, changes | Prompt from the stored (redacted) result; answer with summary, observed facts (with source), likely causes (confidence, evidence), debugging steps, suggested changes | `FailureExplanationService`, `ExplainFailure` |
-| Facts vs hypotheses; no claimed source access; no automatic changes | Facts graded VERIFIED / UNVERIFIED / NOT_CHECKABLE against the input; hypotheses separate; source-code claims flagged; inputs listed, `sourceCodeProvided: false`; changes are proposals | same |
-| C. Base URL and model by environment; availability check | `OLLAMA_BASE_URL` (validated), `APIFORGE_AI_MODEL`, `APIFORGE_AI_ENABLED`; status by listing models (READY / MODEL_MISSING / UNAVAILABLE / DISABLED) | `AiProperties`, `AiStatusService` |
-| Model not found, Ollama down, timeouts, malformed output, overload | Classified failures with their own error codes; retry only overload and invalid output, once | `OllamaGateway.classify`, `AiCallRunner` |
-| Size limits, bounded retries, no endless expensive calls | 24 000-character prompt limit (checked before the call), 1 500 output tokens, 120 s timeout without retry, at most 2 attempts, 1 concurrent call, 10 per user per minute | `AiProperties` |
-| Secrets out of prompts; auditable without prompt content | Second sanitizer over already-redacted data, no hosts; audit with model, outcome, attempts, latency, sizes and prompt SHA-256 | `PromptSanitizer`, `AiCallRunner.audit` |
-| Model and operation status in the UI | Header chip (model, state, details, Check again); loading with elapsed seconds, success, error with retry | `AiStatusBadge`, panels |
-| D. Evaluation dataset; JSON validity, relevance, grounding, duplicates, latency; results documented | 10 known failures with expected facts, 7 operations for suggestions, a runner; results for two models | `evaluation/ai/`, docs/AI_EVALUATION.md |
-| E. Suggestions panel, Explain Failure, states, accept/edit/reject | Tests tab panel; result views (runs and console) | `features/ai` |
-| Install Ollama and choose a model by hardware | Steps, hardware table, configuration, troubleshooting | docs/AI.md |
-
-### Verification (executed 2026-10-22; Windows 11, Docker Desktop 29.9.1, Node 24.22.0, JDK 21.0.8, Ollama 0.40.7, RTX 3060 Laptop 6 GB)
-
-| Check | Method | Result |
-|---|---|---|
-| Backend build and tests (clean checkout) | `git checkout-index` of the staged tree into an empty directory, `mvnw verify` | ✅ **801 tests, 0 failures, 0 errors, 0 skipped**; compiled with all lint warnings as errors; enforcer (incl. dependency convergence with Spring AI) and architecture rules pass; line coverage 92.9% (6588/7089), branch 78.5%; `ai` package 93.4% lines, 73.7% branches. A first clean run had 1 failure — the migration-order test did not yet list V12 — fixed and re-run |
-| Frontend (clean checkout) | `npm ci`, `npm run check`, coverage, `npm run build` | ✅ 0 vulnerabilities; 0 lint findings; tsc clean; **100/100 tests**; lines 89.5%, branches 75.5%; build without warnings |
-| Migration on existing data | Backend jar against the Phase 7 dev database | ✅ V11 → V12 applied |
-| **Completion check**: run with a local model, verify structured output, disconnect Ollama, test malformed output | Headless Microsoft Edge against the running stack with Ollama (`qwen2.5:7b` on the GPU) and the Warehouse Lab server in violation mode, three stages in one run: (1) live — AI suggestions and an explanation through the UI; (2) Ollama processes stopped; (3) the backend pointed at a fake Ollama answering malformed output | ✅ **27/27 checks.** Live: status READY with the model in the header; loading state; 5 suggestions stored `AI_SUGGESTED`/pending, with request, expectations, rationale and model, not runnable; accept and reject recorded; explanation (19.3 s) with summary, graded facts, hypotheses, steps and changes, `sourceCodeProvided: false`, facts and hypotheses shown apart. Offline: UNAVAILABLE in API and header, "Suggest tests" disabled with the reason, API 503 `AI_UNAVAILABLE` (no hang), generation (128 tests), a run with contract validation (129 tests, 13 deliberate failures) and coverage still work, a stored explanation stays readable. Malformed: error shown with a retry, nothing stored, exactly 2 model calls, explanation 502 `AI_INVALID_OUTPUT`, earlier explanation unchanged. No JavaScript errors |
-| Evaluation | `evaluation/ai/run-eval.mjs` against `qwen2.5:7b` and `llama3.2:3b` | ✅ Recorded in docs/AI_EVALUATION.md: both 10/10 and 7/7 valid structured output; explanations fully relevant 9/10 for both; all checkable facts found in the data; median latency 16.1 s vs 5.3 s (explanations) and 33.0 s vs 8.1 s (suggestions); suggestions: qwen 28 stored / 7 discarded, llama 13 stored / 34 discarded; manual review: 7 of qwen's 28 useful, 11 not useful or wrong |
-| Secrets and audit | `psql` and backend logs after the runs | ✅ 103 AI requests audited (OK, INVALID_OUTPUT, UNAVAILABLE) with no prompt content; the demo key appears 0 times in explanations, AI tests and the logs |
-
-### Defects found and fixed during this phase
-
-- **`null` crashed the shared schema validator** (pattern `switch` without `case null`) when a model answered `"value": null`; the same bug could have broken contract validation of `null` response fields. Found by the evaluation.
-- **False "source code" claims**: a JSON parser position quoted from the data matched the detector; phrases present in the input no longer count.
-- **Exact duplicates missed** because path/query values were compared with JSON types (`1` vs `"1"`); now compared as text, which also improves coverage's duplicate count.
-- **Timeouts were reported as Ollama errors**: Spring AI wraps the transport exception; the classifier now searches the whole cause chain.
-- **The per-user AI rate limit** stopped the evaluation of the fast model (by design); the evaluation client now honours `retryAfterSeconds`.
-- The migration-order test did not list V12 (first clean-checkout run).
-- VS Code's Java build writes into `target/classes`, so Maven sometimes skipped compiling edited sources locally; final results come from clean checkouts built by `javac`.
-
-### Known limitations
-
-- Suggestion quality depends heavily on the model: with `qwen2.5:7b` about a quarter of stored suggestions were judged useful and some invent constraints; review is required (and enforced).
-- Grounding can only check facts that cite concrete values (about a third of facts in the evaluation).
-- Model calls are synchronous HTTP requests (up to the timeout) and not cancellable from the UI.
-- Prompts are English; output follows the prompt language.
-- Only `qwen2.5:7b` and `llama3.2:3b` were evaluated, on one machine and one small dataset.
-- GitHub CI does not run Ollama; AI is tested there with the scripted fake. CI status for this branch is checked by the user.
-
 ## History
 
+- **Phase 9 (2026-10-22)** — Complete frontend and user experience (V13): dashboard and project overview from stored numbers, settings (profile, password change ending other sessions, account deletion), project-wide test finder, run filters, suite runs, confirmation dialogs, offline/backend banners, accessibility fixes. 816 backend and 116 frontend tests; walkthrough 73/73, axe 0 violations. Committed as `17edf71`.
 - **Phase 8 (2026-10-22)** — Local AI with Ollama (Spring AI 2.0.1, V12): test suggestions stored for review, failure explanations with graded facts and separate hypotheses, structured output validated, graceful degradation, evaluation of two models. 801 backend and 100 frontend tests; completion check 27/27 (live, Ollama stopped, malformed output). Committed as `afd6910`.
 - **Phase 7 (2026-10-22)** — Specification coverage (V11): defined metrics with test design kept apart from execution, gaps, filters, drill-down, duplicates counted once, snapshots and changes across versions. 745 backend and 95 frontend tests; completion check 48/48 against hand-calculated metrics. Committed as `dcc870b`.
 - **Phase 6 (2026-10-22)** — Response contract validation (documented status, media type, JSON syntax, body schema with JSON paths, expected and actual), honest outcomes (skipped never counted as passed), run reports with outcome filters, body inspection, timing and run comparison (V10). 687 backend and 90 frontend tests; completion check 27/27 against the Warehouse Lab server with deliberate violations (reported failures equal the server's actual violations). Committed as `476ae9d`.
@@ -134,6 +125,7 @@
 - [x] Phase 7 — Coverage and missing-scenario analysis
 - [x] Phase 8 — Local AI with Ollama (suggestions, explanations, evaluation)
 - [x] Phase 9 — Complete frontend and user experience (dashboard, overview, settings, finder, filters, states, accessibility)
+- [x] Phase 10 — Automated testing and quality assurance (QA_REPORT.md)
 - [ ] Hardening and release (Dockerfiles, nginx, full Compose, Playwright E2E in CI)
 
 ## Completion definition tracker
@@ -150,7 +142,7 @@
 | AI outages do not break deterministic testing | ✅ Phase 8 (verified with Ollama stopped) |
 | Auth, authorization and outbound safeguards tested | ✅ incl. 168 outbound security tests and execution ITs |
 | Every major workflow works in the UI with persisted data | ✅ Phase 9 (73/73 walkthrough checks, axe 0 violations, no mobile overflow) |
-| Automated tests and CI pass | ◐ Local runs pass; GitHub CI not yet run |
+| Automated tests and CI pass | ◐ All local suites pass (868 backend, 125 frontend, 11 e2e journeys); GitHub CI not run from here |
 | Docker-based local setup works | ◐ PostgreSQL only |
 | README has reproducible setup and usage | ✅ for the Phase 3 scope |
 | No unresolved critical defects or falsely advertised features | ✅ |

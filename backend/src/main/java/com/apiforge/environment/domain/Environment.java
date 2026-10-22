@@ -1,5 +1,6 @@
 package com.apiforge.environment.domain;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -86,7 +87,7 @@ public class Environment extends AuditableEntity {
     }
 
     public Map<String, String> getDefaultHeaders() {
-        return defaultHeaders;
+        return Collections.unmodifiableMap(defaultHeaders);
     }
 
     public UUID getProjectId() {
@@ -118,6 +119,6 @@ public class Environment extends AuditableEntity {
     }
 
     public Map<String, Object> getAuthConfig() {
-        return authConfig;
+        return Collections.unmodifiableMap(authConfig);
     }
 }

@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Objects;
@@ -339,11 +340,11 @@ public class TestCase extends AuditableEntity {
     }
 
     public Map<String, Object> getRequestTemplate() {
-        return requestTemplate;
+        return Collections.unmodifiableMap(requestTemplate);
     }
 
     public Map<String, Object> getExpectations() {
-        return expectations;
+        return Collections.unmodifiableMap(expectations);
     }
 
     public String getRationale() {

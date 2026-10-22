@@ -138,10 +138,10 @@ apiforge:
   outbound:
     trusted-targets-enabled: true          # false in prod profile
     trusted-targets:
-      - host: localhost        # demo-target run locally outside Docker
+      - host: localhost        # samples/warehouse-lab-server.mjs (application-dev.yml)
         port: 8090
-      - host: demo-target
-        port: 8080
+      - host: 127.0.0.1
+        port: 8090
 ```
 
 - A trusted target matches on **exact host and port**. It bypasses only the private, loopback and CGNAT checks.

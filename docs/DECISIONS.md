@@ -116,9 +116,10 @@ Verified on **2026-10-20** (Phase 0) and updated with the versions actually reso
 ### ADR-017 Boot-native structured logging
 **Decision**: `logging.structured.format.console=ecs` in prod. No logstash-logback-encoder dependency.
 
-### ADR-018 Bundled `demo-target` as the authorized test API
+### ADR-018 Bundled `demo-target` as the authorized test API — implemented differently
 **Decision**: A small Spring Boot app with its own OpenAPI spec and deliberate, documented contract deviations. It is the default trusted target in dev and Compose and is used by ITs and E2E tests.
 **Consequences**: The demo, CI and screenshots never test third-party systems.
+**Status (Phase 10)**: Implemented as `samples/warehouse-lab-server.mjs` (a dependency-free Node server for `samples/warehouse-lab-openapi.yaml`, with documented deliberate deviations) and, in backend tests, the in-process `TargetApi`. No `demo-target/` module exists.
 
 ### ADR-019 Default model `llama3.2:3b`, configurable — superseded by ADR-029
 **Context**: The model must run on a typical laptop CPU and support Ollama structured outputs. Thinking-style models emit reasoning that complicates strict JSON output.

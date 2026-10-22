@@ -31,7 +31,7 @@ flowchart LR
         api[backend<br/>Spring Boot 4.1 / Java 21]
         db[(PostgreSQL 18)]
         llm[Ollama<br/>local model]
-        demo[demo-target<br/>authorized sample API]
+        demo[Warehouse Lab sample<br/>authorized sample API]
     end
     ext[(Authorized external<br/>test APIs)]
     blocked[[Private / loopback /<br/>link-local / metadata]]
@@ -226,12 +226,11 @@ React SPA (Vite, TypeScript 6.0, Tailwind CSS 4, shadcn/ui on Radix primitives, 
 | `/projects` | API projects ✅ | List (search, sort, active/archived, paging), create, edit, archive/restore, delete (typed confirmation) |
 | `/projects/:projectId` | Project overview ✅ | Setup checklist derived from the project's state (spec → tests → environment → run), key numbers linking to their tabs, recent runs, Run tests (Phase 9) |
 | `/projects/:projectId/spec` | Specification explorer ✅ | Version selector (activate older versions), searchable endpoint index grouped by tag with method filters, version overview (servers, security schemes, tags, import findings, original download), import dialog (upload or paste, dry-run check) |
-| `/projects/:projectId/spec/operations/:operationId` | Endpoint detail ✅ | Parameters by location, request body and responses per media type with an expandable schema viewer (references, enums, nullable, required, constraints, recursion), effective security, import warnings; later: tests for this endpoint and ad hoc send |
+| `/projects/:projectId/spec/operations/:operationId` | Endpoint detail ✅ | Parameters by location, request body and responses per media type with an expandable schema viewer (references, enums, nullable, required, constraints, recursion), effective security, import warnings |
 | `/projects/:projectId/tests` | Test generation workspace ✅ | Generate and regenerate deterministic tests, with a report (created, updated, unchanged, kept edits, archived, skipped with reasons). An endpoint index shows enabled/total counts; each endpoint lists its tests with category, state and suite filters and bulk enable, disable or move. The test panel shows why the test exists, its expected outcome and response checks, the request and its provenance, with enable, move, review and edit. Also a suites dialog and "not generated" reasons per endpoint, AI suggestions per endpoint, and a project-wide test finder (name search; views All, Needs review, AI-suggested, Stale, Disabled; paging; kept in the URL) |
 | `/projects/:projectId/runs` | Execution history ✅ | Runs and console requests, newest first, with outcome counts; filters by kind, status and result kept in the URL; paging; refreshes while a run is active |
-| `/projects/:projectId/runs/:runId` | Run results ✅ | Live progress, cancel, per-test outcomes; result panel with checks, redacted request and response, correlation id. Later: contract validation findings |
+| `/projects/:projectId/runs/:runId` | Run results ✅ | Live progress, cancel, per-test outcomes; outcome filters, result panel with contract assertions (path, expected, actual), body inspector with findings marked, timing, redacted request and response, correlation id, AI explanation; comparison with an earlier run |
 | `/projects/:projectId/console` | Console ✅ | One request through the same guarded engine (method, path, query, headers, body, auth mode, expected statuses) |
-| `/projects/:projectId/executions/:executionId` | Execution detail + AI failure assistant | Request/response (redacted), findings, explain panel |
 | `/projects/:projectId/coverage` | Coverage report | ✅ Metrics with definitions (test design and execution separate), gaps, operation table with filters and drill-down, version changes and history |
 | `/projects/:projectId/environments` | Environment configuration ✅ | Base URL, timeout, redirects, execution policy (confirmation above read-only), auth, default headers, variables (secrets write-only); authorization notice on first creation |
 | `/settings` | Settings ✅ | Profile (display name), password change (ends other sessions), sign-out, account deletion with typed e-mail and password (Phase 9). AI status stays in the header chip |
@@ -259,7 +258,7 @@ Untrusted content (response bodies, spec descriptions, AI text) is always render
 ```
 /
 ├── README.md
-├── docker-compose.yml           # postgres, ollama, backend, frontend, demo-target
+├── docker-compose.yml           # postgres (the full-stack topology is planned, DEPLOYMENT.md §2)
 ├── .env.example                 # documented variables, no real secrets
 ├── .github/workflows/ci.yml
 ├── docs/                        # this documentation
@@ -272,10 +271,10 @@ Untrusted content (response bodies, spec descriptions, AI text) is always render
 │       main/resources/db/migration/V*__*.sql
 ├── frontend/                    # Vite React app
 │   ├── package.json, package-lock.json
-│   ├── Dockerfile, nginx.conf
 │   └── src/...
-├── demo-target/                 # small Spring Boot API + its openapi.yaml (authorized test target)
-└── e2e/                         # Playwright tests against the compose stack
+├── samples/                     # sample OpenAPI documents and the Warehouse Lab API (authorized test target)
+├── evaluation/ai/               # AI evaluation dataset, runner and results
+└── e2e/                         # Playwright end-to-end tests against the running stack
 ```
 
 ## 8. Cross-cutting concerns
@@ -283,6 +282,6 @@ Untrusted content (response bodies, spec descriptions, AI text) is always render
 - **Configuration**: `@ConfigurationProperties` records under the `apiforge.*` prefix, validated at startup with `@Validated`. Profiles: `dev`, `test`, `prod`. Secrets only via environment variables.
 - **Logging**: Spring Boot native structured logging (`logging.structured.format.console=ecs`) in `prod`, human-readable in `dev`. A request-id MDC filter is applied. Log messages never include header values, bodies, or variable values (enforced by the redaction module and tests).
 - **Errors**: RFC 9457 `application/problem+json` via `ProblemDetail`, with a stable `code` and optional `errors[]`. Stack traces are never returned.
-- **Health**: Actuator `health` (liveness/readiness groups) and `info` are exposed. Ollama has its own health indicator but is **excluded from readiness**, so an AI outage does not mark the app down.
+- **Health**: Actuator `health` (liveness/readiness groups) and `info` are exposed; readiness covers the application state and the database only. AI availability is reported by `GET /api/v1/ai/status`, not by Actuator, so an AI outage never marks the app down.
 - **Concurrency**: virtual threads enabled. Run execution uses a bounded executor with per-user concurrency caps.
 - **Time & IDs**: UUIDv7-style random UUIDs generated in the app, `timestamptz` everywhere, and an injectable `Clock` for tests.

@@ -92,8 +92,8 @@ public class AuthService {
             loginAttempts.recordFailure(normalizedEmail);
             throw invalidCredentials();
         }
-        AuthenticatedUser principal = (AuthenticatedUser) authentication.getPrincipal();
-        if (!loginAttempts.completeLogin(principal.id())) {
+        if (!(authentication.getPrincipal() instanceof AuthenticatedUser principal)
+                || !loginAttempts.completeLogin(principal.id())) {
             throw invalidCredentials();
         }
         return authentication;

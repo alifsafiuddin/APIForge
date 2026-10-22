@@ -17,8 +17,6 @@ export const aiStatusSchema = z.object({
   latencyMs: z.number().nullable(),
   checkedAt: z.string(),
 })
-export type AiStatus = z.infer<typeof aiStatusSchema>
-
 export const suggestionReportSchema = z.object({
   operationKey: z.string(),
   model: z.string(),

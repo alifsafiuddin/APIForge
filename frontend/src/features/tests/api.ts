@@ -89,8 +89,6 @@ const expectationsSchema = z.object({
     z.object({ status: z.string(), mediaType: z.string(), schemaName: z.string().nullable().optional() }),
   ),
 })
-export type TestExpectations = z.infer<typeof expectationsSchema>
-
 export const testDetailSchema = testSummarySchema.omit({ expectedStatuses: true, sortOrder: true }).extend({
   executable: z.boolean(),
   scenarioKey: z.string().nullable(),
@@ -120,10 +118,7 @@ export const testCountsSchema = z.object({
   stale: z.number(),
   operations: z.array(operationCountSchema),
 })
-export type TestCounts = z.infer<typeof testCountsSchema>
-
 const skippedSchema = z.object({ operationKey: z.string(), scenario: z.string(), reason: z.string() })
-export type SkippedScenario = z.infer<typeof skippedSchema>
 
 export const generationReportSchema = z.object({
   specificationVersionId: z.string(),

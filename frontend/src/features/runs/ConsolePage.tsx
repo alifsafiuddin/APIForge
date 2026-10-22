@@ -17,9 +17,18 @@ import { ResultView } from './ResultView'
 const SELECT = 'h-9 rounded-lg border border-input bg-background px-2.5 text-sm'
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
 
+/** JSON.parse with an error that names the field, instead of the parser's bare message. */
+function parseJson(label: string, text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown
+  } catch (error) {
+    throw new Error(`${label} is not valid JSON${error instanceof Error ? ` (${error.message})` : ''}.`, { cause: error })
+  }
+}
+
 function parseObject(label: string, text: string): Record<string, unknown> {
   if (text.trim() === '') return {}
-  const value: unknown = JSON.parse(text)
+  const value = parseJson(label, text)
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(`${label} must be a JSON object.`)
   }
@@ -57,7 +66,7 @@ export function ConsolePage() {
           pathParams: {},
           query: parseObject('Query', query),
           headers: parseObject('Headers', headers) as Record<string, string>,
-          body: bodyMode === 'NONE' ? { mode: 'NONE' } : { mode: bodyMode, contentType, value: bodyMode === 'JSON' ? JSON.parse(body || 'null') : body },
+          body: bodyMode === 'NONE' ? { mode: 'NONE' } : { mode: bodyMode, contentType, value: bodyMode === 'JSON' ? parseJson('Body', body || 'null') : body },
           auth,
         },
         expectedStatuses: expected.split(',').map((status) => status.trim()).filter(Boolean),

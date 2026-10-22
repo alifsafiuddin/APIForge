@@ -1,0 +1,16 @@
+{
+  "name": "apiforge-e2e",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end tests of critical user journeys against a running APIForge stack",
+  "scripts": {
+    "test": "playwright test",
+    "report": "playwright show-report",
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "24.19.2",
+    "typescript": "6.0.3"
+  }
+}

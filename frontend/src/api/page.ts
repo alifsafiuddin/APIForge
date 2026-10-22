@@ -12,8 +12,3 @@ export function pageSchema<T extends z.ZodType>(item: T) {
     }),
   })
 }
-
-export type Page<T> = {
-  content: T[]
-  page: { number: number; size: number; totalElements: number; totalPages: number }
-}

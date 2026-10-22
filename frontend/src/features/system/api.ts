@@ -9,8 +9,6 @@ export const systemInfoSchema = z.object({
   apiVersion: z.string(),
   serverTime: z.string(),
 })
-export type SystemInfo = z.infer<typeof systemInfoSchema>
-
 const healthStatusSchema = z.enum(['UP', 'DOWN', 'OUT_OF_SERVICE', 'UNKNOWN'])
 export type HealthStatus = z.infer<typeof healthStatusSchema>
 
@@ -18,8 +16,6 @@ export const healthSchema = z.object({
   status: healthStatusSchema,
   components: z.record(z.string(), z.object({ status: healthStatusSchema })).optional(),
 })
-export type Health = z.infer<typeof healthSchema>
-
 export const systemKeys = {
   info: ['system', 'info'] as const,
   health: ['system', 'health'] as const,

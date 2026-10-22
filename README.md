@@ -2,7 +2,7 @@
 
 A full-stack developer tool for **contract-driven API testing**. You import an OpenAPI 3.x specification, explore its endpoints, and generate deterministic test scenarios from its schemas. APIForge AI then runs them against an API you are authorized to test, validates every response against the documented contract, tracks specification coverage, and can ask a **locally hosted** LLM (Ollama) to explain failures.
 
-> **Status: Phase 9 (complete frontend and user experience) complete.**
+> **Status: Phase 10 (automated testing and quality assurance) complete** — results in [docs/QA_REPORT.md](docs/QA_REPORT.md).
 > What runs today:
 > - A **dashboard** and per-project **overview** with stored numbers (tests to review, stale tests, last run, coverage snapshot, recent runs) and a setup checklist; **Settings** for display name, password (ends other sessions) and account deletion; a project-wide test finder, run-history filters, confirmation dialogs for irreversible actions, offline and backend-down banners, mobile layouts and accessibility checked with axe.
 > - Registration and sign-in (sessions, CSRF, lockout, rate limiting, audit trail) and private API projects.
@@ -118,6 +118,18 @@ All `/api/v1/**` endpoints require a signed-in session unless marked public. Sta
 
 Every response carries an `X-Request-Id` header. Errors use `application/problem+json` with a stable `code`.
 
+## End-to-end tests
+
+With PostgreSQL, the backend (dev profile) and the frontend running:
+
+```bash
+cd e2e && npm ci
+npx playwright install chromium   # once, or set E2E_BROWSER=msedge (or chrome) to use an installed browser
+npx playwright test               # starts the Warehouse Lab sample API itself
+```
+
+Run it once with Ollama running and once without: the AI journeys cover both cases. Details: [docs/TESTING.md](docs/TESTING.md).
+
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -171,7 +183,8 @@ docs/        Architecture, schema, API design, security, testing, deployment, de
 | [SECURITY.md](docs/SECURITY.md) | Threat model, SSRF controls, secrets, AI safety |
 | [AI.md](docs/AI.md) | Installing Ollama, choosing a model for your hardware, configuration, what the model sees |
 | [AI_EVALUATION.md](docs/AI_EVALUATION.md) | Measured quality and latency of the AI features |
-| [TESTING.md](docs/TESTING.md) | Test strategy and CI gates |
+| [TESTING.md](docs/TESTING.md) | Test levels, rule catalogue, suites, quality gates, running the tests |
+| [QA_REPORT.md](docs/QA_REPORT.md) | Phase 10 quality-assurance results: commands, outcomes, defects, security checks, limitations |
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Prerequisites, Compose topology, configuration, CI/CD |
 | [DECISIONS.md](docs/DECISIONS.md) | ADRs and the verified dependency compatibility matrix |
 | [PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | Current phase, milestone checklist, verification results |

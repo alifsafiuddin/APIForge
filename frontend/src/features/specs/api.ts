@@ -42,8 +42,6 @@ const versionDetailSchema = z.object({
   tags: z.array(jsonObject),
   messages: z.array(importMessageSchema),
 })
-export type VersionDetail = z.infer<typeof versionDetailSchema>
-
 export const operationSummarySchema = z.object({
   id: z.string(),
   operationKey: z.string(),

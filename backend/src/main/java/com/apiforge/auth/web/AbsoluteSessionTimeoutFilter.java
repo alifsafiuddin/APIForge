@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpSession;
 
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.stereotype.Component;
@@ -61,11 +62,11 @@ public class AbsoluteSessionTimeoutFilter extends OncePerRequestFilter {
         if (clock.millis() - authenticatedAt >= absoluteTimeout.toMillis()) {
             return true;
         }
-        if (session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY) instanceof SecurityContext context
-                && context.getAuthentication() != null
-                && context.getAuthentication().getPrincipal() instanceof AuthenticatedUser user) {
-            return epochs.changedAt(user.id()) > authenticatedAt;
+        if (!(session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY) instanceof SecurityContext context)) {
+            return false;
         }
-        return false;
+        Authentication authentication = context.getAuthentication();
+        return authentication != null && authentication.getPrincipal() instanceof AuthenticatedUser user
+                && epochs.changedAt(user.id()) > authenticatedAt;
     }
 }

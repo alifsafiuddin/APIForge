@@ -1,84 +1,85 @@
 # Testing Strategy
 
-> Status: strategy for all phases; section 7 lists the tests that exist (Phases 1–2). Results are only reported in [PROJECT_STATUS.md](PROJECT_STATUS.md) after they have actually been run.
+> Status: describes the tests that exist (Phases 1–10). Results are only reported in [PROJECT_STATUS.md](PROJECT_STATUS.md) and [QA_REPORT.md](QA_REPORT.md) after they have actually been run.
 
 ## 1. Principles
 
 1. Every important business rule has a test that would fail if the rule were broken.
 2. Security controls are tested as **negative** tests: the attack is attempted and must be blocked.
-3. Tests never hit the public internet. Outbound execution tests use WireMock or the `demo-target` app via explicitly configured trusted targets.
-4. Real PostgreSQL (Testcontainers) for anything involving persistence. No H2: behaviour must match production (jsonb, citext, constraints).
-5. AI tests use a stub `ChatModel`. Real-Ollama tests exist, are tagged `ollama`, and are excluded from CI.
-6. A test result is only reported as passed after it has actually run. Skipped and disabled tests are listed, not hidden.
+3. Tests never hit the public internet. Execution tests send requests to local test servers only (`TargetApi` in the backend tests, the Warehouse Lab sample in end-to-end tests) through explicitly configured trusted targets.
+4. Real PostgreSQL (Testcontainers) for anything involving persistence. No H2: behaviour must match production (jsonb, citext, constraints, triggers).
+5. AI is tested against a scripted fake Ollama HTTP server (`FakeOllama`): valid, malformed and slow answers, missing models, overload. Real models are exercised by the evaluation (`evaluation/ai/`) and the end-to-end suite, not by the build.
+6. A test result is only reported as passed after it has actually run. Skipped tests are listed, not hidden.
 
 ## 2. Test levels
 
 | Level | Backend | Frontend |
 |---|---|---|
-| Unit | JUnit 5 + AssertJ + Mockito. Pure logic: generators, outcome evaluator, address classifier, ref guard, redactor, AI output validator, variable resolver | Vitest + Testing Library: components, hooks, zod schemas, formatting |
-| Slice | `@WebMvcTest` + Spring Security test (auth, CSRF, validation, problem+json); `@DataJpaTest` + Testcontainers (constraints, queries) | Page-level tests with MSW-mocked API |
-| Integration | `@SpringBootTest` + Testcontainers PostgreSQL + WireMock target + MockMvc: full flows (import → generate → run → validate → coverage) | — |
-| Architecture | ArchUnit (implemented in Phase 2): layering, module boundaries, "only `outbound` builds HTTP clients", "only `ai` uses Spring AI" | oxlint rules (`react/no-danger` as error, hooks rules, jsx-a11y) |
-| End-to-end | — | Playwright against the Docker Compose stack (backend + Postgres + demo-target; Ollama stubbed or absent) |
+| Unit | JUnit 5 + AssertJ: generator, value synthesis, schema resolution and validation, contract validation, outcome evaluation, coverage calculation, address classification, URL parsing, redaction, AI output rules, rate limiter, clock | Vitest: formatting, JSON paths, check summaries, redirect safety, API client |
+| Web slice | `@WebMvcTest` + Spring Security test: problem+json for every error class, CORS | — |
+| Integration | `@SpringBootTest` with a real HTTP port + Testcontainers PostgreSQL 18.6 + local target servers: import → generate → run → validate → coverage → AI, authentication, authorization, HTTP contract | Page and workflow tests with Testing Library against the real route tree, with the API mocked by MSW |
+| Architecture | ArchUnit: layering, module boundaries, "only `outbound` opens HTTP connections", "only `ai` uses Spring AI", "only `secrets` uses cryptography" | oxlint (`--deny-warnings`, incl. jsx-a11y and React rules), `tsc` strict |
+| End-to-end | — | Playwright (`e2e/`) against the running stack: critical journeys with real PostgreSQL, backend, frontend, the Warehouse Lab API and (optionally) Ollama |
 
-## 3. Business-rule test catalogue (planned)
+## 3. Business-rule test catalogue
 
-| Area | Rule | Test |
+| Area | Rule | Tests |
 |---|---|---|
-| Auth | Passwords stored hashed; login rotates session; lockout after 5 failures | `AuthServiceTest`, `LoginLockoutIT`, `SessionFixationIT` |
-| AuthZ | Non-owner gets 404 on every project-scoped endpoint and causes no side effects | `CrossUserAccessIT` (parameterized over endpoint list) |
-| CSRF | State-changing requests without a token → 403 | `CsrfIT` |
-| Spec import | Valid 3.0/3.1 JSON and YAML import; invalid gives readable messages; external `$ref` rejected; size and YAML-alias limits | `RefGuardTest`, `SpecImportServiceIT`, fixtures in `src/test/resources/specs/` |
-| Spec versions | Re-import creates a new immutable version; old runs still reference the old version; vanished operations mark tests `STALE` | `SpecVersioningIT` |
-| SSRF | Every range in SECURITY.md §6.2 blocked, including encoded forms; mixed public/private DNS answers blocked; rebinding (different answer on second lookup) does not change the connect target; redirect to private blocked; trusted target allowed only on exact host:port; metadata never allowed | `AddressClassifierTest`, `HostParserTest`, `GuardedDnsResolverTest`, `OutboundGuardIT` |
-| Limits | Timeout → `ERROR/TIMEOUT`; body over cap → truncated or `RESPONSE_TOO_LARGE`; gzip bomb capped after decompression | `OutboundLimitsIT` (WireMock delays, chunked bodies) |
-| Secrets | Secret never returned by API, never in history, never in logs, never in AI context | `SecretRedactionIT`, `RedactorTest`, log-capture test |
-| Generation ✅ | Same spec gives the same tests (determinism); categories produced only where applicable; every generated request is what its test claims (valid, or broken in exactly one place); unsafe or ambiguous negatives skipped with reason; regeneration is idempotent and keeps user edits | `DeterministicTestGeneratorTest` (incl. a golden scenario-key list and an invariant check over five fixture specs), `SchemaValidatorTest`, `ValueSynthesizerTest`, `TestGenerationIntegrationTest` |
-| Validation | Status, content type, schema type/required/enum/format/additionalProperties findings carry the correct JSON path and spec pointer | `ContractValidatorTest` with a matrix of fixture responses |
-| Outcome | Exhaustive table: any FAIL gives FAILED; any INCONCLUSIVE (no FAIL) gives INCONCLUSIVE; transport error gives ERROR; never PASSED with a skipped mandatory check | `OutcomeEvaluatorTest` (parameterized) |
-| Review gate | AI-suggested test cannot run until approved; editing resets approval | `ReviewGateIT` |
-| Execution policy | READ_ONLY environment refuses POST/PUT/PATCH/DELETE tests | `ExecutionPolicyIT` |
-| Coverage | Metric numerators and denominators match hand-computed fixtures; INCONCLUSIVE and SKIPPED are not counted as passed | `CoverageServiceIT` |
-| AI | Valid output accepted; invalid JSON, unknown operation, disallowed header, absolute URL or unknown citation rejected → fallback; Ollama down gives fallback and deterministic flows unaffected | `AiOutputValidatorTest`, `FailureAssistantIT` (stub model that throws, times out, or returns garbage) |
-| Health | Ollama down does not affect readiness | `HealthIT` |
+| Auth | Passwords stored hashed; login rotates the session; lockout after 5 failures; password change ends other sessions; account deletion | `AuthIntegrationTest`, `AccountIntegrationTest`, `UserLockoutTest`, `PasswordPolicyTest`, `AbsoluteSessionTimeoutFilterTest`; e2e `auth.spec.ts` |
+| AuthZ | A non-owner gets the same 404 as for a missing resource on every project-scoped endpoint, with no side effect | `CrossUserAccessIntegrationTest` and the per-feature integration tests (environments, runs, dashboard, AI) |
+| CSRF | State-changing requests without a token → 403 | `AuthIntegrationTest`, `AccountIntegrationTest`, `ApiExceptionHandlerTest` |
+| HTTP contract | Malformed JSON, wrong types, unknown properties, wrong media type or method, malformed ids and unknown enum values are 4xx problem+json with a request id, never 500; created resources and pages have one shape | `ApiContractIntegrationTest`, `ApiExceptionHandlerTest`, `ProblemErrorControllerTest` |
+| Spec import | Valid 3.0/3.1 JSON and YAML import; invalid documents give readable, located messages; external `$ref` rejected; size and YAML limits; unusual but valid input | `SpecificationImportIntegrationTest`, `SpecificationEdgeCasesIntegrationTest`, `SpecificationAnalyzerTest` |
+| Spec versions | Re-import creates an immutable version; vanished operations make tests stale | `SpecificationImportIntegrationTest`, `TestGenerationIntegrationTest`, `CoverageIntegrationTest` |
+| SSRF | Every blocked range incl. encoded forms; mixed DNS answers; rebinding; redirects re-checked; trusted target only on exact host:port; metadata never allowed | `AddressClassifierTest`, `UrlGuardTest`, `DestinationPolicyTest`, `OutboundHttpClientTest`, `ExecutionIntegrationTest`, `ExecutionRulesIntegrationTest`; e2e `safety.spec.ts` |
+| Limits | Timeouts, response size caps, truncation, redirect chains | `OutboundHttpClientTest` |
+| Secrets | Secret never returned, never in history, logs or AI context; encrypted at rest | `SecretCipherTest`, `RedactorAndEvaluatorTest`, `EnvironmentIntegrationTest`, `EnvironmentRulesIntegrationTest`, `ExecutionIntegrationTest`, `AiRulesTest` |
+| Generation | Deterministic; each negative test broken in exactly one place; regeneration idempotent and keeps edits; values satisfy every `allOf` member | `DeterministicTestGeneratorTest`, `ValueSynthesizerTest`, `AllOfSynthesisTest`, `TestGenerationIntegrationTest` |
+| Validation | Status, content type and schema findings with JSON path, expected and actual | `ContractValidatorTest`, `SchemaValidatorTest`, `SchemaResolverTest` |
+| Outcome | Any FAIL gives FAILED; skipped checks never count as passed | `RedactorAndEvaluatorTest`, `ExecutionIntegrationTest` |
+| Run selection | Only enabled, approved, active tests run; unknown or foreign ids, empty operations or suites refused before sending | `ExecutionRulesIntegrationTest`, `ExecutionIntegrationTest` |
+| Execution policy | A read-only environment never sends mutating requests | `ExecutionIntegrationTest` |
+| Coverage | Metrics match hand-computed fixtures; inconclusive and skipped are not passed | `CoverageCalculatorTest`, `CoverageRulesTest`, `CoverageIntegrationTest` |
+| AI | Structured output validated; malformed output retried once then reported; review required before running; Ollama down leaves everything else working | `AiRulesTest`, `OllamaGatewayTest`, `AiIntegrationTest`; e2e `ai.spec.ts` (both with and without Ollama) |
+| Dashboard | Every number equals what is stored | `DashboardIntegrationTest`, `Dashboard.test.tsx` |
 
 ## 4. Fixtures
 
-- `backend/src/test/resources/specs/`: `petstore3-official.yaml`, `pets-3.0.json`, `inventory-3.0.yaml`, `library-3.1.json`, `warehouse-lab-3.0.yaml` (copy of `samples/warehouse-lab-openapi.yaml`, the constraint-rich generation sample). Invalid and hostile documents are written inline in the tests.
-- `demo-target/`: a small Spring Boot API with `openapi.yaml` and a few **deliberate, documented** contract deviations (wrong type in one field, undocumented 500 path, missing required field behind a query flag), so validation and the AI assistant have real failures to explain.
+- `backend/src/test/resources/specs/`: `petstore3-official.yaml`, `pets-3.0.json`, `inventory-3.0.yaml`, `library-3.1.json`, `warehouse-lab-3.0.yaml` (copy of `samples/warehouse-lab-openapi.yaml`). Invalid and hostile documents are written inline in the tests.
+- `TargetApi` (backend tests): an in-process HTTP API for execution tests. `samples/warehouse-lab-server.mjs`: the sample API for end-to-end tests, with documented deliberate contract deviations.
+- `FakeOllama` (backend tests): a scripted Ollama HTTP server.
 
-## 5. Coverage and quality gates (CI)
+## 5. Coverage and quality gates
 
-| Gate | Threshold / rule |
-|---|---|
-| Backend build | `./mvnw -B verify`: compile with `-Xlint:all`; unit + integration tests; ArchUnit |
-| Backend line coverage (JaCoCo) | ≥ 80% overall; ≥ 90% for `outbound`, `validation`, `generation`, `secrets` packages |
-| Frontend | `npm run lint`, `npm run typecheck`, `npm test -- --coverage` (≥ 70% lines on `src/features`) |
-| E2E | Playwright smoke suite on the compose stack (main branch and PRs touching both apps) |
-| Dependencies | `npm audit --audit-level=high`, dependency review action |
-| Warnings | Warnings are fixed, not suppressed. Any `@SuppressWarnings` needs a justification comment and review |
-
-Thresholds are enforced from the phase that introduces the relevant package. They will not be lowered to make a build pass.
+| Gate | Where | Rule |
+|---|---|---|
+| Backend build | CI and local | `./mvnw -B verify`: compile with `-Xlint:all` as errors; all tests; ArchUnit; enforcer (Java/Maven versions, dependency convergence) |
+| Backend coverage (JaCoCo) | CI and local | ≥ 80% lines overall; ≥ 90% lines for `outbound`, `validation`, `generation`, `secrets` |
+| Frontend | CI and local | `npm run lint`, `npm run typecheck`, `npm run test:coverage`, `npm run build` |
+| Dependencies | CI: `npm audit --omit=dev --audit-level=high`; QA pass: `npm audit`, OSV-Scanner over the backend SBOM and the lockfiles (QA_REPORT.md) | No known vulnerabilities |
+| Static analysis | QA pass: SpotBugs (max effort, medium threshold), knip | Findings fixed or justified in QA_REPORT.md |
+| End-to-end | Local (needs the full stack; not run in CI yet) | `cd e2e && npx playwright test`, once with Ollama running and once without |
+| Warnings | Everywhere | Fixed, not suppressed |
 
 ## 6. Running tests
 
 ```bash
-# Backend: 816 tests (JUnit 5, Testcontainers PostgreSQL 18.6, real HTTP for integration tests). Frontend: 116 tests (Vitest, Testing Library, MSW). Results of the latest run are recorded in [PROJECT_STATUS.md](PROJECT_STATUS.md).
+# Backend: 868 tests (JUnit 5, Testcontainers PostgreSQL 18.6, real HTTP for integration tests). Docker must be running.
 cd backend && ./mvnw verify              # Windows: .\mvnw.cmd verify
 
-# Frontend
+# Frontend: 125 tests (Vitest, Testing Library, MSW)
 cd frontend && npm ci && npm run check   # lint + typecheck + tests
 npm run test:coverage
 
-# Later phases
-./mvnw test -Dgroups=ollama              # Phase 7, optional, real local Ollama required
-cd e2e && npx playwright test            # Phase 8
+# End-to-end: PostgreSQL, the backend (dev profile) and the frontend dev server must be running (README Quick start).
+cd e2e && npm ci
+npx playwright install chromium          # once; or set E2E_BROWSER=msedge / chrome to use an installed browser
+npx playwright test                      # starts the Warehouse Lab sample API itself
 ```
-
 
 ## 7. Tests implemented so far (Phases 1–9)
 
-Backend: 816 tests (JUnit 5, Testcontainers PostgreSQL 18.6, real HTTP for integration tests). Frontend: 116 tests (Vitest, Testing Library, MSW). Results of the latest run are recorded in [PROJECT_STATUS.md](PROJECT_STATUS.md).
+Backend: 868 tests (JUnit 5, Testcontainers PostgreSQL 18.6, real HTTP for integration tests). Frontend: 125 tests (Vitest, Testing Library, MSW). Results of the latest run are recorded in [PROJECT_STATUS.md](PROJECT_STATUS.md).
 
 ### Backend
 
@@ -108,6 +109,14 @@ Backend: 816 tests (JUnit 5, Testcontainers PostgreSQL 18.6, real HTTP for integ
 | `SpecificationAnalyzerTest` | 41 | Valid JSON (pets) and YAML (inventory) documents; the official Petstore 3 sample (19 operations); responses ordered with `default` last; nested and recursive schema references kept and resolvable; arrays, enums, nullable, required and `allOf` preserved; referenced parameters, request bodies, responses and headers resolved; path-level parameters and effective security; unsupported features reported per operation; OpenAPI 3.1 type arrays and webhooks; malformed JSON and YAML with line/column; empty, binary, mis-encoded and non-object input; BOM; Swagger 2.0 and unsupported versions; missing `openapi`, `info`, `responses`, `info.title`; undeclared path parameters; external references in 7 forms (incl. the metadata IP); unresolved, malformed and non-string references; `$ref` keys inside examples ignored; duplicate YAML and JSON keys; duplicate operationIds and ambiguous paths; alias bomb, recursive anchor, deep nesting and operation-count limits; aliases expanded correctly with dates kept as strings |
 | `SpecificationImportIntegrationTest` | 16 | Multipart YAML upload → active version 1 with normalized operations, schemas, servers, tags and security schemes; pasted JSON; original stored byte for byte and downloaded as an attachment; official Petstore import; missing fields → 422 with messages and nothing stored; malformed upload with line; external reference → 422 and a live local server receives 0 requests; oversized upload and pasted text → 413 (service and filter paths); dry run never persists; re-import keeps v1 with its operations and the run that references it, marks the test for a vanished operation STALE and reactivation revives it; identical content flagged; `activate=false`; auditing; another user gets 404 on every spec endpoint and cannot import |
 | `RequestSizeLimitFilterTest` | 3 | Declared oversized bodies rejected before the chain; chunked bodies counted while read; small bodies untouched |
+| `ApiContractIntegrationTest` | 10 | Over real HTTP: malformed JSON, wrong JSON types and unknown properties → 400 `MALFORMED_REQUEST`; bean validation lists every field; 415 and 405 (with `Allow`); malformed UUIDs, enum and boolean parameters → 400, disallowed sort → 400 `VALIDATION_ERROR`; unknown resources and paths → 404; every problem has status, code, title, detail, instance and a request id equal to `X-Request-Id`, no stack trace; created resources have `Location` and read back identically (timestamps included); one page shape with a size cap; 204 has no body |
+| `SpecificationEdgeCasesIntegrationTest` | 8 | Undeclared path parameter (error naming it), wrongly typed field, unknown fields as warnings (still imported), Swagger 2.0 and OpenAPI 4.0 rejected, non-object documents rejected without a 500, documents without paths, Unicode paths and parameter names, duplicate operation ids |
+| `EnvironmentRulesIntegrationTest` | 8 | Every auth type stored with its variable names; per-field errors for each auth type; name, timeout, base URL with query and header names validated; more than 30 default headers and duplicate names (case-insensitive) rejected; variable name, CR/LF, length (4096) and count (100) limits, updates allowed at the limit; secret set and deletion audited; **environment deletion** removes its secrets while runs keep their history and environment name; another user cannot change or delete it |
+| `ExecutionRulesIntegrationTest` | 6 | Selected disabled tests refused with their names; unknown and foreign test ids 404; operation or suite without runnable tests refused; another project's environment 404; console requests with an invalid method, an absolute URL or no path refused before anything is sent; a finished run cannot be cancelled — in every refusal no run is created |
+| `SecretLoggingIntegrationTest` | 1 | With all log output captured: registration, failed and successful sign-in, password change, secrets set and sent as bearer token, query parameter and header — none of the passwords, secrets, session or CSRF tokens or the e-mail address appears in the log, while the outbound requests are logged |
+| `SchemaResolverTest` | 10 | allOf: bounds tightened, required and properties united (shared properties keep both declarations), enums and types intersected, impossible combinations reported, every member validated even where the flattened view keeps one keyword; references outside components, missing or cyclic → unresolvable; reference chains with sibling keywords; nesting limit; boolean schemas; oneOf alternatives merged with the parent |
+| `AllOfSynthesisTest` | 7 | Synthesized values satisfy every allOf member (patterns, multipleOf, formats, enums, items) or are refused with a reason |
+| `ClockConfigTest` | 2 | The application clock has microsecond precision (like PostgreSQL) and delegates milliseconds and zone |
 | `AccountIntegrationTest` | 7 | Rename (trimmed, session renewed, audited) and its validation; password change keeps this session with a new id and ends another browser's session, old password rejected and new one accepted, `credentials_changed_at` set, audited; wrong current password, policy violation and unchanged password each reported on their field; 5 password checks per user per minute (429 with `retryAfterSeconds`); account deletion requires the password and the e-mail, deletes the user's projects, ends all sessions and keeps the audit event with the user id as subject; sign-in and CSRF required |
 | `DashboardIntegrationTest` | 4 | Empty dashboard for a new account; totals, project summaries (specification, active/pending/stale tests, suites, environments, last run, latest stored coverage snapshot), recent runs and the project overview equal what was created through the API (archived and empty projects included correctly); owner scoping (404 for another user's overview, 401 signed out); run history filters by kind, status and failures match the unfiltered list, unknown status → 400 |
 | `AuthIntegrationTest` | 14 | Registration stores only a `{bcrypt}` hash and signs in; duplicate e-mail rejected case-insensitively; field validation; weak passwords rejected by policy (nothing stored); login sets `HttpOnly`/`SameSite=Lax` session and `SameSite=Strict` CSRF cookies; unknown e-mail and wrong password give identical 401s; lockout after 5 failures even with the correct password, recovery after expiry; session id rotation (old id unusable); logout invalidates server-side (replayed cookie rejected); every protected endpoint and unknown path → 401 problem+json; public endpoints stay open; requests without CSRF token → 403 `CSRF_INVALID` with no side effect; CSRF token rotates on login and the new one works immediately |
@@ -143,5 +152,17 @@ Backend: 816 tests (JUnit 5, Testcontainers PostgreSQL 18.6, real HTTP for integ
 | `SettingsPage.test.tsx` | 4 | Reached from the account menu; display name saved and shown in the header; password change with local mismatch check, server field error on the current password and form reset on success; account deletion disabled until the e-mail is typed, server field error shown, then signed out to the login page |
 | `RunFilters.test.tsx` | 3 | Run history filters (kind, result, status) sent to the API, kept in the URL, restored after reload, cleared; filtered empty state; run dialog runs one chosen suite |
 | `AllTestsPanel.test.tsx` | 2 | Project-wide test finder: debounced name search sent as `q` and kept in the URL; "Needs review" view; view opened from the URL |
+| `ConsolePage.test.tsx` | 4 | Invalid JSON in query, headers or body names the field and sends nothing; server field errors listed while the form keeps its values; blocked destination, rate limit and unreachable backend explained; link to Environments when none exists |
+| `ErrorHandling.test.tsx` | 5 | Generation failure shows the problem detail and stays retryable; a refused run start (429) is shown in the dialog; a 401 on a mutation ends the session and returns to sign-in; a response of the wrong shape is an error, never data; a route that throws shows the error page |
 | `ConnectionBanner.test.tsx` | 2 | Backend-unreachable banner with "Check again" that clears once health answers; offline banner on the browser's offline event, cleared when back online |
 | `SchemaView.test.tsx` | 9 | Reference expansion with required, nullable, enum and constraints; collapsing deep references; recursion stops; unresolved references; 3.1 type arrays; composition; description text is not rendered as markup; type labels; JSON-pointer escapes |
+
+### End-to-end (`e2e/`, Playwright)
+
+| Spec | Journeys |
+|---|---|
+| `contract-testing.spec.ts` | Create a project, import and browse the specification, generate tests, configure the environment and its secret, run everything, open a contract failure (assertions, redacted credentials), filter the history, coverage, dashboard numbers |
+| `auth.spec.ts` | Protected page → sign-in (wrong password, then correct) → back to the page; password change signs out a second browser, new password works; account deletion with typed e-mail; sign-out invalidates the server session (replayed cookie rejected) |
+| `safety.spec.ts` | Metadata, alternative-notation, `file:` and IPv4-mapped destinations refused in the environment form; secrets never rendered or returned; destructive actions confirmed, cancel changes nothing, project deletion needs the typed name |
+| `ai.spec.ts` | With Ollama: suggestions stay pending and cannot run. Without Ollama: AI actions disabled with the reason, AI endpoints answer `AI_*` errors, generation, a full run and coverage still work. One of the two is skipped in each run, so the suite is run once with and once without Ollama |
+| `resilience.spec.ts` | Offline and unreachable-backend banners appear and clear; main pages without horizontal scrolling at 390 px, mobile navigation |

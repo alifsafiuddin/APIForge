@@ -129,8 +129,9 @@ final class ResponseCatalog {
             if (map.get("$ref") instanceof String ref && ref.startsWith(SchemaResolver.COMPONENT_PREFIX)) {
                 return Pointers.unescape(ref.substring(SchemaResolver.COMPONENT_PREFIX.length()));
             }
-            if ("array".equals(map.get("type")) && schemaName(map.get("items")) instanceof String items) {
-                return "array of " + items;
+            if ("array".equals(map.get("type"))) {
+                String items = schemaName(map.get("items"));
+                return items == null ? null : "array of " + items;
             }
         }
         return null;

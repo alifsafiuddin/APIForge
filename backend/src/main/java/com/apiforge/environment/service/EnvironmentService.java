@@ -175,7 +175,7 @@ public class EnvironmentService {
                 variable.setSecret(ciphertext, cipher.keyId());
             }
             audit.record(AuditEventType.SECRET_CHANGED, userId, null, projectId,
-                    Map.of("environmentId", environmentId.toString(), "variable", name));
+                    Map.of("environmentId", environmentId.toString(), "variable", name, "action", "set"));
         } else if (variable == null) {
             variable = EnvironmentVariable.plain(environmentId, name, value);
         } else {
