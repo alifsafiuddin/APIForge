@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useParams } from 'react-router'
 import { toast } from 'sonner'
 
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -93,10 +94,11 @@ function EnvironmentCard({
   onEdit: () => void
 }) {
   const remove = useDeleteEnvironment(projectId)
+  const [confirming, setConfirming] = useState(false)
   const destroy = async () => {
-    if (!window.confirm(`Delete environment "${environment.name}"? Runs keep their history.`)) return
     try {
       await remove.mutateAsync(environment.id)
+      setConfirming(false)
       toast.success('Environment deleted.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'The environment could not be deleted.')
@@ -113,11 +115,21 @@ function EnvironmentCard({
           <Button size="sm" variant="outline" onClick={onEdit}>
             Edit
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => void destroy()} disabled={remove.isPending}>
+          <Button size="sm" variant="ghost" onClick={() => setConfirming(true)} disabled={remove.isPending}>
             Delete
           </Button>
         </div>
       </div>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`Delete environment “${environment.name}”?`}
+        description="Its settings, variables and secrets are deleted and cannot be restored. Past runs keep their results and the environment name."
+        confirmLabel="Delete environment"
+        pendingLabel="Deleting…"
+        pending={remove.isPending}
+        onConfirm={() => void destroy()}
+      />
       <div className="flex flex-wrap gap-1.5 text-xs">
         <Badge variant={environment.executionPolicy === 'READ_ONLY' ? 'secondary' : 'destructive'}>
           {POLICY_LABELS[environment.executionPolicy]}
@@ -137,6 +149,7 @@ function EnvironmentCard({
 function Variables({ projectId, environment }: { projectId: string; environment: EnvironmentDetail }) {
   const put = usePutVariable(projectId, environment.id)
   const remove = useDeleteVariable(projectId, environment.id)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [value, setValue] = useState('')
   const [secret, setSecret] = useState(true)
@@ -153,6 +166,17 @@ function Variables({ projectId, environment }: { projectId: string; environment:
     }
   }
 
+  const destroy = async (variableName: string) => {
+    try {
+      await remove.mutateAsync(variableName)
+      setDeleting(null)
+      toast.success(`Variable ${variableName} deleted.`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'The variable could not be deleted.')
+    }
+  }
+  const deletingSecret = environment.variables.find((variable) => variable.name === deleting)?.secret ?? false
+
   return (
     <section aria-label={`Variables of ${environment.name}`} className="space-y-2 border-t pt-3">
       <h3 className="text-sm font-medium">Variables</h3>
@@ -167,13 +191,27 @@ function Variables({ projectId, environment }: { projectId: string; environment:
               <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
                 {variable.secret ? (variable.hasValue ? '•••••• (write-only)' : 'not set') : variable.value}
               </span>
-              <Button size="xs" variant="ghost" aria-label={`Delete variable ${variable.name}`} onClick={() => void remove.mutateAsync(variable.name)}>
+              <Button size="xs" variant="ghost" aria-label={`Delete variable ${variable.name}`} onClick={() => setDeleting(variable.name)}>
                 Delete
               </Button>
             </li>
           ))}
         </ul>
       )}
+      <ConfirmDialog
+        open={deleting !== null}
+        onOpenChange={(open) => (open ? undefined : setDeleting(null))}
+        title={`Delete variable ${deleting ?? ''}?`}
+        description={
+          deletingSecret
+            ? 'The secret value is erased and cannot be shown or restored. Requests that reference it will fail until it is set again.'
+            : 'Requests that reference it will fail until it is set again.'
+        }
+        confirmLabel="Delete variable"
+        pendingLabel="Deleting…"
+        pending={remove.isPending}
+        onConfirm={() => (deleting ? void destroy(deleting) : undefined)}
+      />
       <form onSubmit={(event) => void add(event)} className="flex flex-wrap items-center gap-2">
         <Input aria-label="Variable name" placeholder="NAME" className="h-8 w-36 font-mono" value={name} onChange={(event) => setName(event.target.value)} />
         <Input

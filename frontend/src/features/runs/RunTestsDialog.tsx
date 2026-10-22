@@ -6,12 +6,13 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { POLICY_LABELS, useEnvironments } from '@/features/environments/api'
+import { useSuites } from '@/features/tests/api'
 
 import { useStartRun } from './api'
 
-type Scope = 'operation' | 'selected' | 'all'
+type Scope = 'operation' | 'selected' | 'suite' | 'all'
 
-/** Starts a run of the endpoint's tests, the selected tests or all runnable tests. */
+/** Starts a run of the endpoint's tests, the selected tests, one suite or all runnable tests. */
 export function RunTestsDialog({
   projectId,
   open,
@@ -27,6 +28,9 @@ export function RunTestsDialog({
 }) {
   const environments = useEnvironments(projectId)
   const start = useStartRun(projectId)
+  const suites = useSuites(projectId)
+  const [suiteId, setSuiteId] = useState('')
+  const chosenSuite = suiteId || suites.data?.find((suite) => suite.testCount > 0)?.id || suites.data?.[0]?.id || ''
   const navigate = useNavigate()
   const [environmentId, setEnvironmentId] = useState('')
   const [scope, setScope] = useState<Scope>(selectedTestIds.length > 0 ? 'selected' : operationKey ? 'operation' : 'all')
@@ -40,7 +44,9 @@ export function RunTestsDialog({
           ? { environmentId: chosen, testIds: selectedTestIds }
           : scope === 'operation' && operationKey
             ? { environmentId: chosen, operationKey }
-            : { environmentId: chosen }
+            : scope === 'suite'
+              ? { environmentId: chosen, suiteId: chosenSuite }
+              : { environmentId: chosen }
       const started = await start.mutateAsync(body)
       onOpenChange(false)
       void navigate(`/projects/${projectId}/runs/${started.id}`)
@@ -92,6 +98,26 @@ export function RunTestsDialog({
                 <Radio value="selected" scope={scope} onChange={setScope} label={`The ${selectedTestIds.length} selected tests`} />
               ) : null}
               {operationKey ? <Radio value="operation" scope={scope} onChange={setScope} label={`All enabled tests of ${operationKey}`} /> : null}
+              {suites.data && suites.data.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Radio value="suite" scope={scope} onChange={setScope} label="All enabled tests of suite" />
+                  <select
+                    aria-label="Suite to run"
+                    className="h-8 min-w-0 rounded-lg border border-input bg-background px-2"
+                    value={chosenSuite}
+                    onChange={(event) => {
+                      setSuiteId(event.target.value)
+                      setScope('suite')
+                    }}
+                  >
+                    {suites.data.map((suite) => (
+                      <option key={suite.id} value={suite.id}>
+                        {suite.name} ({suite.testCount})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <Radio value="all" scope={scope} onChange={setScope} label="All enabled tests of the project" />
             </fieldset>
           </div>
@@ -100,7 +126,7 @@ export function RunTestsDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={() => void run()} disabled={!chosen || start.isPending}>
+          <Button onClick={() => void run()} disabled={!chosen || (scope === 'suite' && !chosenSuite) || start.isPending}>
             {start.isPending ? 'Starting…' : 'Start run'}
           </Button>
         </DialogFooter>

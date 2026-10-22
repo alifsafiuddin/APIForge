@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { z } from 'zod'
 
 import { apiRequest, noContent } from '@/api/client'
@@ -169,6 +169,11 @@ export type TestFilter = {
   enabled?: boolean | undefined
   origin?: z.infer<typeof originSchema> | undefined
   reviewStatus?: z.infer<typeof reviewStatusSchema> | undefined
+  lifecycleStatus?: 'ACTIVE' | 'STALE' | undefined
+  /** Case-insensitive match on the test name. */
+  q?: string | undefined
+  page?: number | undefined
+  size?: number | undefined
 }
 
 export const testKeys = {
@@ -189,20 +194,26 @@ export function useTestCounts(projectId: string) {
   })
 }
 
-/** Up to 100 tests (the page limit) matching the filter, in generation order. */
-export function useTests(projectId: string, filter: TestFilter, enabled = true) {
-  const params = new URLSearchParams({ size: '100' })
+/**
+ * One page (default: up to 100 tests, the page limit) matching the filter, in generation order.
+ * With `keepPrevious`, the previous page stays visible (marked as placeholder) while the next loads.
+ */
+export function useTests(projectId: string, filter: TestFilter, enabled = true, keepPrevious = false) {
+  const params = new URLSearchParams({ size: String(filter.size ?? 100), page: String(filter.page ?? 0) })
   if (filter.operationKey) params.set('operationKey', filter.operationKey)
   if (filter.suiteId) params.set('suiteId', filter.suiteId)
   if (filter.category) params.set('category', filter.category)
   if (filter.enabled !== undefined) params.set('enabled', String(filter.enabled))
   if (filter.origin) params.set('origin', filter.origin)
   if (filter.reviewStatus) params.set('reviewStatus', filter.reviewStatus)
+  if (filter.lifecycleStatus) params.set('lifecycleStatus', filter.lifecycleStatus)
+  if (filter.q) params.set('q', filter.q)
   return useQuery({
     queryKey: testKeys.list(projectId, filter),
     queryFn: ({ signal }) =>
       apiRequest(`${base(projectId)}/tests?${params.toString()}`, pageSchema(testSummarySchema), { signal }),
     enabled,
+    placeholderData: keepPrevious ? keepPreviousData : undefined,
   })
 }
 

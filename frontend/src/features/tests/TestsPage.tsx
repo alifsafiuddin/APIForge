@@ -1,5 +1,5 @@
 import { FlaskConical, FolderCog, ListChecks, Play, Search, Sparkles } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 
@@ -31,6 +31,8 @@ import {
   useTestCounts,
   useTests,
 } from './api'
+import { AllTestsPanel } from './AllTestsPanel'
+import { TEST_VIEWS, type TestView } from './views'
 import { SuitesDialog } from './SuitesDialog'
 import { TestDetailSheet } from './TestDetailSheet'
 
@@ -54,15 +56,33 @@ export function TestsPage() {
 
   const selectedKey = searchParams.get('operation') ?? undefined
   const selectedTest = searchParams.get('test') ?? undefined
+  const viewParam = searchParams.get('view')
+  const view: TestView = viewParam !== null && viewParam in TEST_VIEWS ? (viewParam as TestView) : 'all'
+  const findQuery = searchParams.get('find') ?? ''
+  const findPage = Math.max(0, Number(searchParams.get('tpage')) || 0)
 
-  const updateParams = (changes: Record<string, string | undefined>) => {
-    const next = new URLSearchParams(searchParams)
-    for (const [key, value] of Object.entries(changes)) {
-      if (value === undefined) next.delete(key)
-      else next.set(key, value)
-    }
-    setSearchParams(next)
-  }
+  const updateParams = useCallback(
+    (changes: Record<string, string | undefined>) => {
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current)
+        for (const [key, value] of Object.entries(changes)) {
+          if (value === undefined || value === '') next.delete(key)
+          else next.set(key, value)
+        }
+        return next
+      })
+    },
+    [setSearchParams],
+  )
+  const updateFinder = useCallback(
+    (changes: { view?: TestView; query?: string; page?: number }) =>
+      updateParams({
+        ...(changes.view !== undefined ? { view: changes.view === 'all' ? undefined : changes.view } : {}),
+        ...(changes.query !== undefined ? { find: changes.query } : {}),
+        ...(changes.page !== undefined ? { tpage: changes.page > 0 ? String(changes.page) : undefined } : {}),
+      }),
+    [updateParams],
+  )
 
   const runGeneration = async () => {
     try {
@@ -168,9 +188,14 @@ export function TestsPage() {
                 onOpen={(testId) => updateParams({ test: testId })}
               />
             ) : (
-              <Card className="items-center gap-2 px-6 py-12 text-center text-sm text-muted-foreground">
-                Select an endpoint to review its tests.
-              </Card>
+              <AllTestsPanel
+                projectId={projectId}
+                view={view}
+                query={findQuery}
+                page={findPage}
+                onChange={updateFinder}
+                onOpen={(testId) => updateParams({ test: testId })}
+              />
             )}
           </div>
         </div>

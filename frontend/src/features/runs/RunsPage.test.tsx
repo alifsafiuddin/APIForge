@@ -133,6 +133,8 @@ describe('Runs', () => {
     await user.keyboard('{Escape}')
 
     await user.click(screen.getByRole('button', { name: 'Cancel run' }))
+    const confirm = await screen.findByRole('alertdialog', { name: 'Cancel this run?' })
+    await user.click(within(confirm).getByRole('button', { name: 'Cancel run' }))
     expect(await screen.findByText('Cancelled by the user; tests not yet executed were skipped.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Cancel run' })).not.toBeInTheDocument()
     expect(state.polls).toBeGreaterThan(1)

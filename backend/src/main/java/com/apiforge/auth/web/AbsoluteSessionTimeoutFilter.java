@@ -12,13 +12,18 @@ import jakarta.servlet.http.HttpSession;
 
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.apiforge.auth.service.AuthenticatedUser;
+import com.apiforge.auth.service.CredentialEpochs;
 import com.apiforge.config.ApiForgeProperties;
 
 /**
- * Ends sessions a fixed time after sign-in, however active they are. The servlet container
+ * Ends sessions a fixed time after sign-in, however active they are, and sessions signed in before
+ * the user's password changed. The servlet container
  * only provides an idle timeout. Runs before Spring Security, so an expired session is seen
  * as unauthenticated on the same request.
  */
@@ -31,10 +36,12 @@ public class AbsoluteSessionTimeoutFilter extends OncePerRequestFilter {
 
     private final Duration absoluteTimeout;
     private final Clock clock;
+    private final CredentialEpochs epochs;
 
-    public AbsoluteSessionTimeoutFilter(ApiForgeProperties properties, Clock clock) {
+    public AbsoluteSessionTimeoutFilter(ApiForgeProperties properties, Clock clock, CredentialEpochs epochs) {
         this.absoluteTimeout = properties.auth().absoluteSessionTimeout();
         this.clock = clock;
+        this.epochs = epochs;
     }
 
     @Override
@@ -47,9 +54,18 @@ public class AbsoluteSessionTimeoutFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 
+    /** Too old, or signed in before the user's password changed (or the account was deleted). */
     private boolean isExpired(HttpSession session) {
         Object value = session.getAttribute(AUTHENTICATED_AT);
         long authenticatedAt = value instanceof Long millis ? millis : session.getCreationTime();
-        return clock.millis() - authenticatedAt >= absoluteTimeout.toMillis();
+        if (clock.millis() - authenticatedAt >= absoluteTimeout.toMillis()) {
+            return true;
+        }
+        if (session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY) instanceof SecurityContext context
+                && context.getAuthentication() != null
+                && context.getAuthentication().getPrincipal() instanceof AuthenticatedUser user) {
+            return epochs.changedAt(user.id()) > authenticatedAt;
+        }
+        return false;
     }
 }

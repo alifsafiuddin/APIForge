@@ -10,7 +10,8 @@ import { cn } from '@/lib/utils'
 
 import { useProject } from './api'
 
-const SECTIONS = [
+const SECTIONS: { to: string; label: string; end?: boolean }[] = [
+  { to: '.', label: 'Overview', end: true },
   { to: 'spec', label: 'Specification' },
   { to: 'tests', label: 'Tests' },
   { to: 'environments', label: 'Environments' },
@@ -59,6 +60,7 @@ export function ProjectLayout() {
           <NavLink
             key={section.to}
             to={section.to}
+            end={section.end}
             className={({ isActive }) =>
               cn(
                 '-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors',

@@ -36,6 +36,20 @@ export const AI_READY = {
   checkedAt: '2026-10-22T10:00:00Z',
 }
 
+export const EMPTY_DASHBOARD = {
+  totals: {
+    activeProjects: 0,
+    archivedProjects: 0,
+    runsLast7Days: 0,
+    runsWithFailuresLast7Days: 0,
+    runsInProgress: 0,
+    testsPendingReview: 0,
+    staleTests: 0,
+  },
+  projects: [],
+  recentRuns: [],
+}
+
 /** Default: a signed-in user with no projects and a healthy backend. Tests override with server.use(...). */
 export const defaultHandlers = [
   http.get('/actuator/health', () =>
@@ -58,6 +72,7 @@ export const defaultHandlers = [
   }),
   http.get('/api/v1/auth/me', () => HttpResponse.json(TEST_USER)),
   http.get('/api/v1/ai/status', () => HttpResponse.json(AI_READY)),
+  http.get('/api/v1/dashboard', () => HttpResponse.json(EMPTY_DASHBOARD)),
   http.get('/api/v1/projects', ({ request }) => {
     const size = Number(new URL(request.url).searchParams.get('size') ?? 10)
     return HttpResponse.json(emptyPage(size))

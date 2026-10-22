@@ -76,3 +76,33 @@ export function useLogout() {
     },
   })
 }
+
+export function useUpdateProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { displayName: string }) =>
+      apiRequest('/api/v1/auth/me', userSchema, { method: 'PATCH', body: input }),
+    onSuccess: (user) => queryClient.setQueryData(authKeys.me, user),
+  })
+}
+
+/** Changes the password. This session continues; every other session of the account ends. */
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (input: { currentPassword: string; newPassword: string }) =>
+      apiRequest('/api/v1/auth/password', noContent, { method: 'POST', body: input }),
+  })
+}
+
+/** Deletes the account and all its projects; the session ends with it. */
+export function useDeleteAccount() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { password: string; confirmEmail: string }) =>
+      apiRequest('/api/v1/auth/me', noContent, { method: 'DELETE', body: input }),
+    onSuccess: () => {
+      queryClient.clear()
+      queryClient.setQueryData(authKeys.me, null)
+    },
+  })
+}

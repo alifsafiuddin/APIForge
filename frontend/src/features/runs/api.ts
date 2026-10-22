@@ -7,7 +7,7 @@ import { testKeys } from '@/features/tests/api'
 
 export const OUTCOMES = ['PASSED', 'FAILED', 'INCONCLUSIVE', 'ERROR', 'SKIPPED'] as const
 export type Outcome = (typeof OUTCOMES)[number]
-const RUN_STATUSES = ['QUEUED', 'RUNNING', 'COMPLETED', 'CANCELLED', 'INTERRUPTED'] as const
+export const RUN_STATUSES = ['QUEUED', 'RUNNING', 'COMPLETED', 'CANCELLED', 'INTERRUPTED'] as const
 export type RunStatus = (typeof RUN_STATUSES)[number]
 
 export const runSchema = z.object({
@@ -123,7 +123,7 @@ export type RunComparison = z.infer<typeof comparisonSchema>
 
 export const runKeys = {
   all: (projectId: string) => ['runs', projectId] as const,
-  list: (projectId: string, page: number) => ['runs', projectId, 'list', page] as const,
+  list: (projectId: string, filter: RunFilter, page: number) => ['runs', projectId, 'list', filter, page] as const,
   run: (projectId: string, runId: string) => ['runs', projectId, 'run', runId] as const,
   results: (projectId: string, runId: string, outcome: Outcome | undefined, page: number) =>
     ['runs', projectId, 'results', runId, outcome ?? 'ALL', page] as const,
@@ -134,11 +134,18 @@ export const runKeys = {
 const base = (projectId: string) => `/api/v1/projects/${encodeURIComponent(projectId)}`
 export const isActive = (status: RunStatus) => status === 'QUEUED' || status === 'RUNNING'
 
-export function useRuns(projectId: string, page: number) {
+/** Optional run history filters; `failing` true = runs with failed or errored tests, false = clean completed runs. */
+export type RunFilter = { kind?: Run['kind'] | undefined; status?: RunStatus | undefined; failing?: boolean | undefined }
+
+export function useRuns(projectId: string, page: number, filter: RunFilter = {}) {
+  const params = new URLSearchParams({ size: '20', page: String(page), sort: 'createdAt,desc' })
+  if (filter.kind) params.set('kind', filter.kind)
+  if (filter.status) params.set('status', filter.status)
+  if (filter.failing !== undefined) params.set('failing', String(filter.failing))
   return useQuery({
-    queryKey: runKeys.list(projectId, page),
-    queryFn: ({ signal }) =>
-      apiRequest(`${base(projectId)}/runs?size=20&page=${page}&sort=createdAt,desc`, pageSchema(runSchema), { signal }),
+    queryKey: runKeys.list(projectId, filter, page),
+    queryFn: ({ signal }) => apiRequest(`${base(projectId)}/runs?${params.toString()}`, pageSchema(runSchema), { signal }),
+    placeholderData: keepPreviousData,
     refetchInterval: (query) => (query.state.data?.content.some((run) => isActive(run.status)) ? 2000 : false),
   })
 }
@@ -195,7 +202,7 @@ export function useResult(projectId: string, runId: string, resultId: string | u
 export function useStartRun(projectId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (body: { environmentId: string; testIds?: string[]; operationKey?: string }) =>
+    mutationFn: (body: { environmentId: string; testIds?: string[]; operationKey?: string; suiteId?: string }) =>
       apiRequest(`${base(projectId)}/runs`, runSchema, { method: 'POST', body }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: runKeys.all(projectId) }),
   })

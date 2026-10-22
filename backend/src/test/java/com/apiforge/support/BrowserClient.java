@@ -62,6 +62,10 @@ public final class BrowserClient {
         return send(HttpRequest.newBuilder(uri(path)).DELETE(), true);
     }
 
+    public Response delete(String path, Object body) {
+        return send(withJson(HttpRequest.newBuilder(uri(path)), "DELETE", body), true);
+    }
+
     /** A multipart/form-data upload of one file, as a browser form would send it. */
     public Response postFile(String path, String fieldName, String fileName, byte[] content) {
         String boundary = "----apiforge-test-" + UUID.randomUUID();

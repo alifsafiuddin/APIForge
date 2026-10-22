@@ -44,7 +44,7 @@ function RunCard({ title, run, projectId }: { title: string; run: Run; projectId
       <p className="truncate text-xs text-muted-foreground">
         {run.environmentName ?? 'deleted environment'} · {run.baseUrl}
       </p>
-      <OutcomeBar run={run} />
+      <OutcomeBar counts={run.counts} />
       <Counts run={run} />
     </Card>
   )

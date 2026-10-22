@@ -2,8 +2,9 @@
 
 A full-stack developer tool for **contract-driven API testing**. You import an OpenAPI 3.x specification, explore its endpoints, and generate deterministic test scenarios from its schemas. APIForge AI then runs them against an API you are authorized to test, validates every response against the documented contract, tracks specification coverage, and can ask a **locally hosted** LLM (Ollama) to explain failures.
 
-> **Status: Phase 8 (local AI with Ollama) complete.**
+> **Status: Phase 9 (complete frontend and user experience) complete.**
 > What runs today:
+> - A **dashboard** and per-project **overview** with stored numbers (tests to review, stale tests, last run, coverage snapshot, recent runs) and a setup checklist; **Settings** for display name, password (ends other sessions) and account deletion; a project-wide test finder, run-history filters, confirmation dialogs for irreversible actions, offline and backend-down banners, mobile layouts and accessibility checked with axe.
 > - Registration and sign-in (sessions, CSRF, lockout, rate limiting, audit trail) and private API projects.
 > - **OpenAPI 3.0/3.1 import** with immutable versions and a **specification explorer**.
 > - **Deterministic test generation** with a review and curation workspace.
@@ -99,6 +100,8 @@ All `/api/v1/**` endpoints require a signed-in session unless marked public. Sta
 | `GET /api/v1/auth/csrf` | Public. Issues the CSRF cookie |
 | `POST /api/v1/auth/register`, `POST /api/v1/auth/login` | Public. Create an account / sign in (starts a session) |
 | `POST /api/v1/auth/logout`, `GET /api/v1/auth/me` | Sign out / current user |
+| `PATCH /api/v1/auth/me`, `POST /api/v1/auth/password`, `DELETE /api/v1/auth/me` | Change display name / change password (ends other sessions) / delete the account and its projects |
+| `GET /api/v1/dashboard`, `GET /api/v1/projects/{id}/overview` | Home page totals, project summaries and recent runs / one project's summary |
 | `GET, POST /api/v1/projects`; `GET, PATCH, DELETE /api/v1/projects/{id}` | Your projects (paged, searchable, optimistic locking on update) |
 | `POST /api/v1/projects/{id}/specs` (multipart `file` or JSON `{content}`), `POST …/specs/validate` | Import an OpenAPI 3.0/3.1 document as a new version / dry-run check |
 | `GET /api/v1/projects/{id}/specs[/{versionId}[/raw\|/schemas\|/operations[/{operationId}]]]`, `POST …/{versionId}/activate` | Versions, original document, component schemas, endpoint index and detail; activate a version |
@@ -108,7 +111,7 @@ All `/api/v1/**` endpoints require a signed-in session unless marked public. Sta
 | `GET, POST /api/v1/projects/{id}/environments`; `GET, PUT, DELETE …/environments/{envId}`; `PUT, DELETE …/variables/{name}` | Environments and variables (secrets write-only) |
 | `POST /api/v1/projects/{id}/runs`, `POST …/runs/{runId}/cancel` | Start a run of tests (202, poll the run) / cancel it |
 | `POST /api/v1/projects/{id}/executions` | Send one request now (console) |
-| `GET /api/v1/projects/{id}/runs[/{runId}[/results[/{resultId}]]]` | Run history and results (redacted request and response, contract assertions); `?outcome=` filters results |
+| `GET /api/v1/projects/{id}/runs[/{runId}[/results[/{resultId}]]]` | Run history (`?kind=`, `?status=`, `?failing=` filters) and results (redacted request and response, contract assertions); `?outcome=` filters results |
 | `GET /api/v1/projects/{id}/runs/{runId}/comparison[?baseline=]` | Outcome changes against the previous (or a chosen) run |
 | `GET /api/v1/projects/{id}/coverage[?environmentId=]`, `…/coverage/operation?key=`, `…/coverage/changes` | Specification coverage, one operation's coverage, changes between versions |
 | `GET /api/v1/ai/status`, `POST /api/v1/projects/{id}/ai/suggestions`, `POST …/runs/{runId}/results/{resultId}/explanation` | Local AI: availability, test suggestions (pending review), failure explanation |

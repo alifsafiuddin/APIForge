@@ -67,10 +67,11 @@ Paths below are relative to `/api/v1`.
 | POST | `/auth/login` | *public*. `{email, password}` → 200 user. New session id and new CSRF token on success. Every failure is 401 `BAD_CREDENTIALS` with the same message (unknown e-mail, wrong password, locked account) |
 | POST | `/auth/logout` | 204. Invalidates the server session, clears the session cookie and rotates the CSRF token. Requires the CSRF header |
 | GET | `/auth/me` | Current user `{id, email, displayName}`; 401 `UNAUTHENTICATED` without a session |
+| PATCH | `/auth/me` | `{displayName}` (1–100 characters, trimmed, no control characters) → 200 user; the session is renewed with the new name. Audited (`PROFILE_UPDATED`) — Phase 9 |
+| POST | `/auth/password` | `{currentPassword, newPassword}` → 204. Wrong current password → 400 with `errors[].field = currentPassword`; policy violations or an unchanged password → 400 on `newPassword`. This session continues with a new id; **every other session of the account ends** (`users.credentials_changed_at`). Audited (`PASSWORD_CHANGED`) — Phase 9 |
+| DELETE | `/auth/me` | `{password, confirmEmail}` → 204. Deletes the account and, by cascade, every project it owns; all its sessions end. Wrong password → 400 on `password`; e-mail not the account's (case-insensitive) → 400 on `confirmEmail`. Audited (`ACCOUNT_DELETED`, subject = the user id, kept after deletion) — Phase 9 |
 
-Rules (details in [SECURITY.md](SECURITY.md) §3): passwords 12–64 characters and ≤ 72 bytes, not in the common-password list, not containing the e-mail address; e-mail normalized to lower case; 5 consecutive failures lock sign-in for 15 minutes; per-IP limits of 10 sign-ins and 5 registrations per minute (429 `RATE_LIMITED` + `Retry-After`); sessions expire after 30 minutes idle and 12 hours absolute.
-
-Planned (not implemented): `PATCH /users/me` (display name) and `POST /users/me/password`.
+Rules (details in [SECURITY.md](SECURITY.md) §3): passwords 12–64 characters and ≤ 72 bytes, not in the common-password list, not containing the e-mail address; e-mail normalized to lower case; 5 consecutive failures lock sign-in for 15 minutes; per-IP limits of 10 sign-ins and 5 registrations per minute (429 `RATE_LIMITED` + `Retry-After`); sessions expire after 30 minutes idle and 12 hours absolute. Password checks of the account endpoints are limited to 5 per user per minute (429 `RATE_LIMITED` with `retryAfterSeconds`), so a hijacked session cannot be used to guess the password.
 
 ### 2.2 Projects — Phase 2 ✅ implemented
 
@@ -121,7 +122,7 @@ Base: `/projects/{projectId}/specs`. Every call requires owning the project (oth
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/projects/{projectId}/runs` | Paged runs, newest first (`?sort=createdAt\|startedAt\|finishedAt\|status`). Each run: status, environment name/base URL snapshots, outcome counts, timestamps |
+| GET | `/projects/{projectId}/runs` | Paged runs, newest first (`?sort=createdAt\|startedAt\|finishedAt\|status`). Each run: status, environment name/base URL snapshots, outcome counts, timestamps. Filters (Phase 9): `?kind=TEST_RUN\|AD_HOC`, `?status=QUEUED\|RUNNING\|COMPLETED\|CANCELLED\|INTERRUPTED`, `?failing=true` (runs with a failed or errored test) or `false` (completed runs without any); unknown values → 400 |
 | GET | `/projects/{projectId}/runs/{runId}` | One run |
 | GET | `/projects/{projectId}/runs/{runId}/results` | Paged result summaries (`?outcome=PASSED\|FAILED\|ERROR\|SKIPPED\|INCONCLUSIVE`, `?sort=executedAt\|outcome\|durationMs`, default `executedAt,asc`). Each summary includes `failedChecks`, `skippedChecks` and `firstFailure` (Phase 6) |
 | GET | `/projects/{projectId}/runs/{runId}/results/{resultId}` | Full result: request snapshot, response, checks (assertions, §2.6), error kind and message, `durationMs` and `timeToHeadersMs` |
@@ -198,7 +199,18 @@ Tests are not hard-deleted through the API: disable a test to stop it from runni
 | GET | `/projects/{projectId}/coverage/operation?key=&environmentId=` | Drill-down of one operation (`key` = `METHOD /path`): responses with received statuses, negative kinds (`PRESENT`, `MISSING`, `NOT_APPLICABLE`), planned scenarios with covered state and test ids, scenarios the generator skips with the reason, schema branches, enabled tests with `duplicateOf` and latest outcome. Unknown key → 404 |
 | GET | `/projects/{projectId}/coverage/changes?from=` | Changes from `from` (default: the version numbered just below the active one) to the active version: operations `ADDED`/`REMOVED`/`CHANGED` with aspects, tests, tests generated from an earlier version and stale tests; `unchanged` count; `baseline` (latest snapshot of `from`) and `current` summary numbers; `history` (latest 50 snapshots) |
 
-Metric definitions are part of the response and are documented in ADR-028. A cross-project dashboard endpoint was planned here and is not implemented.
+Metric definitions are part of the response and are documented in ADR-028.
+
+### 2.8a Dashboard and project overview ✅ Phase 9
+
+Read-only summaries counted from stored rows (no estimates, no caching):
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/dashboard` | `{totals: {activeProjects, archivedProjects, runsLast7Days, runsWithFailuresLast7Days, runsInProgress, testsPendingReview, staleTests}, projects: [project summary…], recentRuns: [run…]}`. Test runs only (console requests excluded); pending and stale tests of active projects; the 12 most recently active projects (latest of last update and last run) and the 8 latest runs |
+| GET | `/projects/{projectId}/overview` | `{project: project summary, recentRuns: [run…]}` (8 latest test runs); archived projects included |
+
+Project summary: `{id, name, description, archived, updatedAt, activeSpecification: {id, versionNumber, title, apiVersion, operations} \| null, tests: {active, enabled, pendingReview, stale, suites}, environments, lastRun: run \| null, coverage: {takenAt, operations, operationsWithTests, responses, responsesExercised, executed, passed} \| null}`. `coverage` is the latest stored snapshot of the active version (§2.8), shown with its time, not a recalculation. Run: `{id, projectId, projectName, status, environmentName, total, passed, failed, error, inconclusive, skipped, createdAt, finishedAt}`.
 
 ### 2.9 AI ✅ Phase 8
 

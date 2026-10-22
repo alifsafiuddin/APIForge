@@ -155,6 +155,7 @@ export function ConsolePage() {
         </form>
       </Card>
       <Card className="p-4" aria-label="Result">
+        <h2 className="sr-only">Result</h2>
         {result ? <ResultView result={result} projectId={projectId} /> : <p className="text-sm text-muted-foreground">The result appears here. It is also kept in Runs.</p>}
       </Card>
     </div>

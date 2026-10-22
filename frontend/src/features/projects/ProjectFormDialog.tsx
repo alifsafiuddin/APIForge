@@ -45,22 +45,33 @@ export function ProjectFormDialog({
   open,
   onOpenChange,
   project,
+  onCreated,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   project?: Project | undefined
+  /** Called with the new project after a successful create. */
+  onCreated?: (project: Project) => void
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         {/* Content unmounts when the dialog closes, so the form starts fresh on every open. */}
-        <ProjectForm project={project} onDone={() => onOpenChange(false)} />
+        <ProjectForm project={project} onCreated={onCreated} onDone={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
   )
 }
 
-function ProjectForm({ project, onDone }: { project: Project | undefined; onDone: () => void }) {
+function ProjectForm({
+  project,
+  onCreated,
+  onDone,
+}: {
+  project: Project | undefined
+  onCreated: ((project: Project) => void) | undefined
+  onDone: () => void
+}) {
   const create = useCreateProject()
   const update = useUpdateProject()
   const editing = project !== undefined
@@ -77,8 +88,11 @@ function ProjectForm({ project, onDone }: { project: Project | undefined; onDone
         await update.mutateAsync({ id: project.id, version: project.version, ...values })
         toast.success('Project updated.')
       } else {
-        await create.mutateAsync(values)
+        const created = await create.mutateAsync(values)
         toast.success(`Project "${values.name}" created.`)
+        onDone()
+        onCreated?.(created)
+        return
       }
       onDone()
     } catch (error) {

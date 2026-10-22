@@ -1,4 +1,4 @@
-import { FolderKanban, LayoutDashboard, type LucideIcon } from 'lucide-react'
+import { FolderKanban, LayoutDashboard, type LucideIcon, Settings } from 'lucide-react'
 
 export type NavItem = {
   to: string
@@ -24,5 +24,9 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
       { to: '/projects', label: 'Projects', icon: FolderKanban },
     ],
+  },
+  {
+    title: 'Account',
+    items: [{ to: '/settings', label: 'Settings', icon: Settings }],
   },
 ]

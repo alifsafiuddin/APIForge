@@ -51,10 +51,12 @@ public class ExecutionHistoryService {
         this.results = results;
     }
 
-    public Page<RunView> listRuns(UUID userId, UUID projectId, Pageable pageable) {
+    /** Filters are optional ({@code null} = any); see {@link TestRunRepository#search}. */
+    public Page<RunView> listRuns(UUID userId, UUID projectId, TestRun.Kind kind, TestRun.Status status,
+            Boolean failing, Pageable pageable) {
         access.requireOwned(projectId, userId);
         Pageable page = Pagination.sanitize(pageable, RUN_SORTS, Sort.by(Sort.Order.desc("createdAt")));
-        return runs.findByProjectId(projectId, page).map(RunView::from);
+        return runs.search(projectId, kind, status, failing, page).map(RunView::from);
     }
 
     public RunView getRun(UUID userId, UUID projectId, UUID runId) {

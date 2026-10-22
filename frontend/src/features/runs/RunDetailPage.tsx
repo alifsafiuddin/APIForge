@@ -1,7 +1,9 @@
 import { ArrowLeft, GitCompare } from 'lucide-react'
+import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -32,12 +34,12 @@ const BAR_COLORS: Record<Outcome, string> = {
 }
 
 /** Results by outcome as one stacked bar; tests not yet executed stay grey. */
-export function OutcomeBar({ run, className }: { run: Run; className?: string }) {
-  const total = Math.max(run.counts.total, 1)
+export function OutcomeBar({ counts, className }: { counts: Run['counts']; className?: string }) {
+  const total = Math.max(counts.total, 1)
   return (
     <div className={cn('flex h-2 w-full overflow-hidden rounded bg-muted', className)} aria-hidden="true">
       {(['PASSED', 'FAILED', 'ERROR', 'INCONCLUSIVE', 'SKIPPED'] as const).map((outcome) => (
-        <div key={outcome} className={BAR_COLORS[outcome]} style={{ width: `${(run.counts[COUNT_KEYS[outcome]] / total) * 100}%` }} />
+        <div key={outcome} className={BAR_COLORS[outcome]} style={{ width: `${(counts[COUNT_KEYS[outcome]] / total) * 100}%` }} />
       ))}
     </div>
   )
@@ -56,6 +58,7 @@ export function RunDetailPage() {
   const active = run.data ? isActive(run.data.status) : false
   const results = useRunResults(projectId, runId, active, outcome, page)
   const cancel = useCancelRun(projectId, runId)
+  const [confirmingCancel, setConfirmingCancel] = useState(false)
   const selected = searchParams.get('result') ?? undefined
 
   const update = (changes: Record<string, string | undefined>) => {
@@ -81,6 +84,7 @@ export function RunDetailPage() {
   const stop = async () => {
     try {
       await cancel.mutateAsync()
+      setConfirmingCancel(false)
       toast.success('Cancelling: the request in flight is aborted and the remaining tests are skipped.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'The run could not be cancelled.')
@@ -111,18 +115,28 @@ export function RunDetailPage() {
             </Button>
           ) : null}
           {active ? (
-            <Button size="sm" variant="destructive" onClick={() => void stop()} disabled={cancel.isPending}>
+            <Button size="sm" variant="destructive" onClick={() => setConfirmingCancel(true)} disabled={cancel.isPending}>
               Cancel run
             </Button>
           ) : null}
         </div>
+        <ConfirmDialog
+          open={confirmingCancel && active}
+          onOpenChange={setConfirmingCancel}
+          title="Cancel this run?"
+          description="The request in flight is aborted and the remaining tests are skipped. Results recorded so far are kept. A cancelled run cannot be resumed."
+          confirmLabel="Cancel run"
+          pendingLabel="Cancelling…"
+          pending={cancel.isPending}
+          onConfirm={() => void stop()}
+        />
         <p className="text-sm text-muted-foreground">
           {run.data.environmentName ?? 'deleted environment'} · <span className="font-mono">{run.data.baseUrl}</span> · started{' '}
           {formatDateTime(run.data.startedAt ?? run.data.createdAt)}
         </p>
         {run.data.statusReason ? <p className="text-sm">{run.data.statusReason}</p> : null}
         <progress aria-label="Run progress" className="sr-only" max={Math.max(counts.total, 1)} value={done} />
-        <OutcomeBar run={run.data} />
+        <OutcomeBar counts={run.data.counts} />
         <Counts run={run.data} />
       </Card>
 

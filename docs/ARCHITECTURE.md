@@ -73,7 +73,7 @@ flowchart TB
     schema[schema<br/>shared JSON Schema validator]
     coverage[coverage<br/>specification coverage,<br/>gaps, snapshots]
     ai[ai<br/>Ollama gateway (Spring AI), prompts,<br/>sanitizing, output validation]
-    dashboard[dashboard<br/>read models]
+    dashboard[dashboard<br/>read model: SQL aggregates<br/>for home page and project overview]
     common[common<br/>errors, paging, clock, ids]
 
     web --> auth & project & spec & env & testcase & gen & exec & coverage & ai & dashboard
@@ -87,7 +87,7 @@ flowchart TB
     validation --> schema
     coverage --> spec & testcase & exec & gen & schema & env
     ai --> spec & testcase & exec & gen & schema & audit
-    dashboard --> project & exec & coverage
+    dashboard --> project
 ```
 
 Rules (enforced by ArchUnit from Phase 2, when the first layered modules exist):
@@ -222,21 +222,21 @@ React SPA (Vite, TypeScript 6.0, Tailwind CSS 4, shadcn/ui on Radix primitives, 
 | Route | Page | Notes |
 |---|---|---|
 | `/login`, `/register` | Auth ✅ | Registration can be disabled by config; `?next=` is restricted to in-app paths |
-| `/` | Overview dashboard | ✅ recent projects + system status; later recent runs, pass/fail trend, coverage summary |
+| `/` | Overview dashboard ✅ | Totals (active/archived projects, test runs in 7 days and those with failures, tests to review, stale tests), the most recently active projects with specification, tests, environments, last run and stored coverage, recent runs across projects, system status; new-project action (Phase 9) |
 | `/projects` | API projects ✅ | List (search, sort, active/archived, paging), create, edit, archive/restore, delete (typed confirmation) |
-| `/projects/:projectId` | Project overview | Active spec, environments, last run, coverage tile |
+| `/projects/:projectId` | Project overview ✅ | Setup checklist derived from the project's state (spec → tests → environment → run), key numbers linking to their tabs, recent runs, Run tests (Phase 9) |
 | `/projects/:projectId/spec` | Specification explorer ✅ | Version selector (activate older versions), searchable endpoint index grouped by tag with method filters, version overview (servers, security schemes, tags, import findings, original download), import dialog (upload or paste, dry-run check) |
 | `/projects/:projectId/spec/operations/:operationId` | Endpoint detail ✅ | Parameters by location, request body and responses per media type with an expandable schema viewer (references, enums, nullable, required, constraints, recursion), effective security, import warnings; later: tests for this endpoint and ad hoc send |
-| `/projects/:projectId/tests` | Test generation workspace ✅ | Generate and regenerate deterministic tests, with a report (created, updated, unchanged, kept edits, archived, skipped with reasons). An endpoint index shows enabled/total counts; each endpoint lists its tests with category, state and suite filters and bulk enable, disable or move. The test panel shows why the test exists, its expected outcome and response checks, the request and its provenance, with enable, move, review and edit. Also a suites dialog and "not generated" reasons per endpoint. Later: AI suggestions review queue |
-| `/projects/:projectId/runs` | Execution history ✅ | Runs and console requests, newest first, with outcome counts; refreshes while a run is active |
+| `/projects/:projectId/tests` | Test generation workspace ✅ | Generate and regenerate deterministic tests, with a report (created, updated, unchanged, kept edits, archived, skipped with reasons). An endpoint index shows enabled/total counts; each endpoint lists its tests with category, state and suite filters and bulk enable, disable or move. The test panel shows why the test exists, its expected outcome and response checks, the request and its provenance, with enable, move, review and edit. Also a suites dialog and "not generated" reasons per endpoint, AI suggestions per endpoint, and a project-wide test finder (name search; views All, Needs review, AI-suggested, Stale, Disabled; paging; kept in the URL) |
+| `/projects/:projectId/runs` | Execution history ✅ | Runs and console requests, newest first, with outcome counts; filters by kind, status and result kept in the URL; paging; refreshes while a run is active |
 | `/projects/:projectId/runs/:runId` | Run results ✅ | Live progress, cancel, per-test outcomes; result panel with checks, redacted request and response, correlation id. Later: contract validation findings |
 | `/projects/:projectId/console` | Console ✅ | One request through the same guarded engine (method, path, query, headers, body, auth mode, expected statuses) |
 | `/projects/:projectId/executions/:executionId` | Execution detail + AI failure assistant | Request/response (redacted), findings, explain panel |
 | `/projects/:projectId/coverage` | Coverage report | ✅ Metrics with definitions (test design and execution separate), gaps, operation table with filters and drill-down, version changes and history |
 | `/projects/:projectId/environments` | Environment configuration ✅ | Base URL, timeout, redirects, execution policy (confirmation above read-only), auth, default headers, variables (secrets write-only); authorization notice on first creation |
-| `/settings` | Settings | Profile, password, AI status/model info |
+| `/settings` | Settings ✅ | Profile (display name), password change (ends other sessions), sign-out, account deletion with typed e-mail and password (Phase 9). AI status stays in the header chip |
 
-Layout: left sidebar (global: Overview, Projects, Settings; project-scoped section when inside a project), top bar with project switcher and user menu; collapses to a drawer below the `md` breakpoint.
+Layout: left sidebar (Workspace: Overview, Projects; Account: Settings), project sections as tabs inside a project, top bar with AI and backend status and the user menu; the sidebar becomes a drawer below the `lg` breakpoint, where the header shows only the logo and status dots. A banner explains when the browser is offline or the backend does not answer (Phase 9). Irreversible actions (deleting a project, environment, variable or the account, cancelling a run) ask for confirmation in a dialog; deleting a project or the account requires typing its name or e-mail.
 
 ### 6.2 Frontend structure
 
