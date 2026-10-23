@@ -176,6 +176,8 @@ services:
     working_dir: /lab
     environment:
       WAREHOUSE_LAB_HOST: 0.0.0.0
+      # 1 = answer with the documented deliberate contract violations (samples/README.md).
+      WAREHOUSE_LAB_VIOLATIONS: ${APIFORGE_DEMO_VIOLATIONS:-0}
     volumes:
       - ./samples:/lab:ro
     command: ["node", "warehouse-lab-server.mjs"]
