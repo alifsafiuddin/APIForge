@@ -106,6 +106,8 @@ services:
       # true only when users reach nginx solely through Caddy (tls profile) or a load balancer:
       # then their X-Forwarded-For is kept; otherwise clients cannot choose their recorded address.
       APIFORGE_PROXY_TRUSTED: ${APIFORGE_PROXY_TRUSTED:-false}
+      # Longer than 2 x APIFORGE_AI_REQUEST_TIMEOUT (an AI call may be retried once).
+      APIFORGE_PROXY_READ_TIMEOUT: ${APIFORGE_PROXY_READ_TIMEOUT:-300s}
     ports:
       # Loopback by default; the tls profile (or a load balancer) is the public entry point.
       - "${APIFORGE_HTTP_BIND:-127.0.0.1}:${APIFORGE_HTTP_PORT:-8080}:8080"

@@ -1,10 +1,79 @@
 # Project Status
 
-**Current phase**: Phase 11 — Docker, cloud deployment and CI/CD — **complete** (2026-10-23)
-**Next phase**: decided by the next phase brief
-**Runnable today**: the complete stack with one command (`docker compose up -d --build`): PostgreSQL with persistent storage, the backend and the frontend as hardened containers, optional Ollama, HTTPS through Caddy; CI builds the images and runs the end-to-end tests against that stack. Deployment options, backups, monitoring and free-tier limits are in [DEPLOYMENT.md](DEPLOYMENT.md).
+**Current phase**: Phase 12 — Documentation, demo and release — **complete** (2026-10-23)
+**Release status**: feature-complete release candidate. Every mandatory local check passed on a clean clone (below); the remaining step is the first GitHub Actions run after pushing.
+**Runnable today**: the complete stack with one command (`docker compose --profile demo up -d --build`) and the documented demo ([DEMO.md](DEMO.md)); development from source; optional local AI (native Ollama or the `ai` profile).
 
-## Phase 11 summary
+## Phase 12 summary — release
+
+### Delivered
+
+| Requirement | Implementation |
+|---|---|
+| README: overview, features, architecture and database diagrams | README.md rewritten: overview, feature list, architecture (Mermaid) with the technology table, data model (Mermaid ER), contents |
+| Setup and environment variables | Docker quick start, development setup from source, configuration table (full reference in DEPLOYMENT.md §3, every variable in `.env.example`) |
+| Example API requests and responses | README API example; docs/API_EXAMPLES.md with exchanges captured from the running stack (registration with CSRF, import, generation, environment, blocked destination, run, results, coverage, AI status, errors) |
+| Import, generate, inspect contract failures; Ollama and AI | README "Using APIForge" and "AI with Ollama"; docs/AI.md |
+| Screenshots of working screens | docs/screenshots/01–10, captured from the clean-clone stack while executing docs/DEMO.md |
+| Safe, reproducible demo | docs/DEMO.md against the bundled Warehouse Lab sample API (local only; one deliberate violation, more with `APIFORGE_DEMO_VIOLATIONS=1`) |
+| Limitations, security decisions, troubleshooting | README sections plus SECURITY.md and DEPLOYMENT.md |
+| Repository review for secrets and generated files | gitleaks 8.30.1 over the full history and the working tree (four reviewed non-secrets and one captured request id in `.gitleaksignore`); a `gitleaks` CI job; no build output or `.env` tracked |
+| License matching dependencies and assets | MIT LICENSE; THIRD_PARTY_NOTICES.md from the backend SBOM (132 runtime components) and the frontend production dependencies (98 packages); permissive or weak-copyleft libraries used unmodified; the Geist font's OFL text ships with the build at `/licenses/geist-font-OFL-1.1.txt` |
+| Project summary and resume bullets | docs/PORTFOLIO.md, every number traced to an executed result |
+
+### Final completion check (executed 2026-10-23; Windows 11, Docker Desktop 29.9.1, Ollama 0.40.8)
+
+Clean clone of commit `9d07910` into an empty directory, fresh `.env` per the README, new Compose project with new volumes; the release fixes below were then applied to the clone and re-verified.
+
+| Check | Result |
+|---|---|
+| Installation as documented (`docker compose --profile demo up -d --build`) | ✅ images built, services healthy, V1–V13 applied |
+| Demo workflow (docs/DEMO.md, scripted in the browser) | ✅ 12/12 steps with the documented numbers: 7 endpoints, 128 tests, 127 passed / 1 failed with the documented assertions, AI explanation (`qwen2.5:7b`), 115 passed / 13 failed in violations mode with the regressions in the comparison, coverage 7/7 operations, 24/25 responses, 105/105 constraints, 27/27 negative kinds, AI suggestions held for review |
+| Backend `./mvnw -B verify` | ✅ 868 tests, 0 failures, 94.0% line / 80.1% branch coverage |
+| Frontend `npm ci`, `npm run check`, coverage, `npm run build` | ✅ 0 vulnerabilities, 125/125 tests, 90.55% lines, build including the font license |
+| Stack checks (scripted, 36) | ✅ 36/36 after the fixes (images inspected: `apiforge-*:local`) |
+| End-to-end suite, native Ollama | ✅ 11 passed, 1 skipped (the no-AI journey) |
+| End-to-end suite, AI unavailable | ✅ 11 passed, 1 skipped (the AI journey) |
+| `ai` profile (Ollama in the stack) | ✅ `ollama-pull` fetched `llama3.2:3b` into the volume (kept across restarts, port not published), status READY via `http://ollama:11434`; AI journey passed with `APIFORGE_AI_REQUEST_TIMEOUT=600s` and `APIFORGE_PROXY_READ_TIMEOUT=1300s` (CPU only: 167–209 s per suggestion request). With the default 120 s the backend answered with its clean timeout error |
+| Development setup from source | ✅ `./mvnw spring-boot:run` (dev profile, `.env` read, 13 migrations validated, health UP) and `npm run dev` proxying `/api` and `/actuator` to it |
+| Security scans | ✅ OSV-Scanner 2.6.0 on the CycloneDX SBOM and both lockfiles: no issues; gitleaks: no unreviewed findings in history or working tree; actionlint 1.7.12: no findings |
+| README claims | ✅ audited below |
+
+### README claims audit
+
+| Claim | Evidence |
+|---|---|
+| Import (3.0/3.1, JSON/YAML, upload/paste, dry run), safe parsing, explorer | Demo step 3; Phase 3 tests; Petstore's 19 operations counted in `samples/petstore3-openapi.yaml` |
+| Deterministic generation, single-fault negatives, reasons, idempotent regeneration | Demo step 4 (128 tests); Phase 4 completion check |
+| Environments, secrets write-only and encrypted, guarded outbound client | Demo step 5 (`•••••• (write-only)`), API_EXAMPLES blocked metadata URL (400), e2e `safety.spec`, 168 outbound tests |
+| Contract validation with path, expected, actual; honest outcomes; comparison | Demo steps 6–7, API_EXAMPLES result detail, e2e `contract-testing.spec` |
+| Coverage metrics | Demo step 8 numbers |
+| AI suggestions held for review, explanations, works without Ollama | Demo steps 6 and 9, e2e `ai.spec` in both modes, `ai` profile run |
+| Technology versions (Spring Boot 4.1, Hibernate 7, React 19, TypeScript 6, Vite 8, Tailwind 4, PostgreSQL 18, 13 migrations) | `pom.xml`, resolved `hibernate-core` 7.4.5, `frontend/package.json`, Flyway log |
+| Test numbers (868 / 125 / 12 / 36) | Clean-clone runs above |
+| Non-root, read-only containers; database and Ollama not published; CSP | Stack checks; Phase 11 read-only verification |
+| Warnings are errors; `npm run check` = lint, type check, tests | `failOnWarning` in `backend/pom.xml`; `frontend/package.json` |
+| Troubleshooting: missing secrets key, `Secure` cookies over HTTP, AI timeouts | Reproduced: the startup message names `APIFORGE_SECRETS_KEY` / `apiforge.secrets.key`; the AI timeout message is the one `OllamaGateway` returns |
+| CI workflows | Configured and linted, **not yet run on GitHub** (stated as such in README and PORTFOLIO.md) |
+
+### Defects found and fixed during this phase
+
+- **nginx kept a stale backend address**: it resolved `backend` once at startup, so recreating the backend container (new IP) produced 502s until nginx restarted. It now resolves per request through Docker's DNS (`resolver`, variable `proxy_pass`); verified by recreating the backend with a new address while the frontend kept running.
+- **nginx cut long AI requests**: its fixed 180 s read timeout was shorter than an AI call may take (up to two attempts of `APIFORGE_AI_REQUEST_TIMEOUT`), so a slow model produced a 504 in the browser while the backend still succeeded (209 s). Now `APIFORGE_PROXY_READ_TIMEOUT` (default 300 s), documented with CPU-only values.
+- **The demo's violations mode needed a manual container command**: `APIFORGE_DEMO_VIOLATIONS` now switches it from `.env`.
+- gitleaks flagged a request id in a captured response (reviewed and listed); the demo capture script took screenshots while a toast or the previous run's page was still shown (fixed in the script).
+
+### Known limitations (release)
+
+- **GitHub Actions not yet run on GitHub**: the workflows are linted and their steps were executed locally; confirm the first run after pushing before citing CI results.
+- **Single backend instance**: sessions and rate limits in memory; a restart signs users out.
+- **Scope**: OpenAPI 3.0/3.1 HTTP/JSON APIs; multi-file specifications must be bundled; at most 500 tests per run.
+- **AI depends on hardware**: CPU-only inference needs longer timeouts (167–209 s per suggestion request with `llama3.2:3b`); suggestions always need review.
+- **Verified on one machine** (Windows 11, Docker Desktop, Edge). No deployment to a real cloud provider or Let's Encrypt certificate was performed; no free tier reviewed offers a dependable database plus memory for local AI.
+- **No e-mail features** (password reset, e-mail change).
+- Login (10/min) and registration (5/min) rate limits apply per IP, so back-to-back end-to-end runs need a minute between them.
+
+## Phase 11 summary (previous phase)
 
 ### Delivered
 
@@ -52,11 +121,11 @@
 ### Known limitations
 
 - **Not run here**: the GitHub workflows (they run on GitHub; `actionlint` validated them), a deployment to a real cloud provider and a Let's Encrypt certificate (no account or public domain in this environment; the tls profile was verified with Caddy's local CA).
-- **Containerized Ollama (`ai` profile) not pulled on this machine**: the image is 3.4 GB compressed and the system drive had too little free space; AI connectivity from the container was verified with the native Ollama instead. Moving Docker Desktop's disk image to a larger drive would allow it.
+- *(Resolved in Phase 12: pulled and verified after Docker's disk moved to another drive.)* **Containerized Ollama (`ai` profile) not pulled on this machine**: the image is 3.4 GB compressed and the system drive had too little free space; AI connectivity from the container was verified with the native Ollama instead. Moving Docker Desktop's disk image to a larger drive would allow it.
 - A fully free deployment is not dependable with the providers reviewed (DEPLOYMENT.md §11); no free tier offers the memory for local AI.
 - Single backend instance (in-memory sessions and rate limits).
 
-## Phase 10 summary (previous phase)
+## Phase 10 summary
 
 The full report — commands, outcomes, defects, security checks, limitations and checks not run — is [QA_REPORT.md](QA_REPORT.md).
 
@@ -99,6 +168,7 @@ The full report — commands, outcomes, defects, security checks, limitations an
 
 ## History
 
+- **Phase 12 (2026-10-23)** — Release: README, demo workflow, API examples, screenshots, MIT license with third-party notices, gitleaks in CI, portfolio summary; final completion check on a clean clone (demo 12/12, 868 + 125 tests, e2e in both AI modes, 36 stack checks, `ai` profile); nginx runtime DNS and proxy read timeout fixed. Committed as `9d07910` plus the release-verification commit.
 - **Phase 10 (2026-10-22)** — Automated testing and QA: HTTP contract, import edge cases, environment and run rules, schema resolution, secret-logging tests; Playwright end-to-end suite; Tomcat and Jackson upgraded for 17 advisories; microsecond clock; static analysis and dead-code cleanup; QA_REPORT.md. 868 backend and 125 frontend tests, 11 e2e journeys. Committed as `97956ba`.
 - **Phase 9 (2026-10-22)** — Complete frontend and user experience (V13): dashboard and project overview from stored numbers, settings (profile, password change ending other sessions, account deletion), project-wide test finder, run filters, suite runs, confirmation dialogs, offline/backend banners, accessibility fixes. 816 backend and 116 frontend tests; walkthrough 73/73, axe 0 violations. Committed as `17edf71`.
 - **Phase 8 (2026-10-22)** — Local AI with Ollama (Spring AI 2.0.1, V12): test suggestions stored for review, failure explanations with graded facts and separate hypotheses, structured output validated, graceful degradation, evaluation of two models. 801 backend and 100 frontend tests; completion check 27/27 (live, Ollama stopped, malformed output). Committed as `afd6910`.
@@ -130,6 +200,7 @@ The full report — commands, outcomes, defects, security checks, limitations an
 - [x] Phase 9 — Complete frontend and user experience (dashboard, overview, settings, finder, filters, states, accessibility)
 - [x] Phase 10 — Automated testing and quality assurance (QA_REPORT.md)
 - [x] Phase 11 — Docker, deployment and CI/CD
+- [x] Phase 12 — Documentation, demo and release
 
 ## Completion definition tracker
 
@@ -145,7 +216,7 @@ The full report — commands, outcomes, defects, security checks, limitations an
 | AI outages do not break deterministic testing | ✅ Phase 8 (verified with Ollama stopped) |
 | Auth, authorization and outbound safeguards tested | ✅ incl. 168 outbound security tests and execution ITs |
 | Every major workflow works in the UI with persisted data | ✅ Phase 9 (73/73 walkthrough checks, axe 0 violations, no mobile overflow) |
-| Automated tests and CI pass | ◐ All local suites pass (868 backend, 125 frontend, 11 e2e journeys); GitHub CI not run from here |
+| Automated tests and CI pass | ◐ All local suites pass on a clean clone (868 backend, 125 frontend, 12 e2e journeys, 36 stack checks); GitHub CI not run from here |
 | Docker-based local setup works | ✅ Phase 11 (complete stack from a clean environment, persistence, health checks, HTTPS) |
-| README has reproducible setup and usage | ✅ for the Phase 3 scope |
+| README has reproducible setup and usage | ✅ Phase 12 (clean-clone installation, demo and development setup executed; claims audited) |
 | No unresolved critical defects or falsely advertised features | ✅ |

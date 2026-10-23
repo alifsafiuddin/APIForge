@@ -47,7 +47,7 @@ All settings are environment variables of the backend (defaults in `backend/src/
 | `APIFORGE_AI_ENABLED` | `true` | `false` turns the AI features off (the UI says so) |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Where Ollama listens: `http(s)://host:port` without credentials, query or fragment (checked at startup) |
 | `APIFORGE_AI_MODEL` | `qwen2.5:7b` | The Ollama model tag |
-| `APIFORGE_AI_REQUEST_TIMEOUT` | `120s` | One model call (at most 10 min); a call that takes longer is reported as a timeout and not retried |
+| `APIFORGE_AI_REQUEST_TIMEOUT` | `120s` | One model call (at most 10 min); a call that takes longer is reported as a timeout and not retried. In the Docker stack, nginx's `APIFORGE_PROXY_READ_TIMEOUT` must exceed twice this value (one retry after invalid output) |
 | `APIFORGE_AI_MAX_CONCURRENT` | `1` | Model calls at the same time (a local GPU serves one well); further requests wait 2 s, then get "busy" |
 | `APIFORGE_AI_CONTEXT_TOKENS` | `8192` | Context window requested from Ollama |
 
@@ -105,7 +105,7 @@ Measured results are recorded in [AI_EVALUATION.md](AI_EVALUATION.md).
 |---|---|
 | "Unavailable" | Ollama is not running or `OLLAMA_BASE_URL` is wrong. Start Ollama, then **Check again** |
 | "Model not installed" | `ollama pull <model>` for the configured `APIFORGE_AI_MODEL` |
-| "The model did not answer within the request timeout" | The model is too slow for this hardware (CPU only, or larger than GPU memory). Use a smaller model or raise `APIFORGE_AI_REQUEST_TIMEOUT` |
+| "The model did not answer within the request timeout" | The model is too slow for this hardware (CPU only, or larger than GPU memory). Use a smaller model or raise `APIFORGE_AI_REQUEST_TIMEOUT` (and, in the Docker stack, `APIFORGE_PROXY_READ_TIMEOUT` to more than twice that; a 504 without this message means only the latter is too short) |
 | "The model is busy…" | Another AI request is running (`APIFORGE_AI_MAX_CONCURRENT`), or Ollama refused it as busy |
 | "…not valid JSON" / "…does not match the required structure" | The model ignored the schema twice. Try again, or use a stronger model |
 | "Ollama answered 500: model requires more system memory…" | The model does not fit; choose a smaller one |

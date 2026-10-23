@@ -7,3 +7,11 @@ afd6910a9624fe49a6f1adc86467e2b31ae8fc3e:evaluation/ai/run-eval.mjs:generic-api-
 0baf58fcb315cc917c3c6988dc58a80548b7026c:backend/src/main/java/com/apiforge/secrets/SecretCipher.java:generic-api-key:26
 # encryption key of the backend test suite only
 0baf58fcb315cc917c3c6988dc58a80548b7026c:backend/src/test/resources/application-test.yml:generic-api-key:5
+# a request-correlation id (random UUID) in a captured API response, not a credential
+9d079107e4f4a8a00463bcafa122864fdce3d143:docs/API_EXAMPLES.md:generic-api-key:181
+# The same values, as fingerprinted by working-tree scans (gitleaks dir); .env is git-ignored and not listed.
+backend/src/main/java/com/apiforge/secrets/SecretCipher.java:generic-api-key:26
+backend/src/test/resources/application-test.yml:generic-api-key:13
+e2e/support.ts:generic-api-key:9
+docs/API_EXAMPLES.md:generic-api-key:181
+evaluation/ai/run-eval.mjs:generic-api-key:62

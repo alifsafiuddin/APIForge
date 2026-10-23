@@ -1,6 +1,6 @@
 # Deployment
 
-> Status (Phase 11): container images for the backend and frontend, a Compose stack (PostgreSQL, backend, frontend; optional Ollama, Caddy for HTTPS and a demo target), GitHub Actions for tests, images, end-to-end tests on the stack, dependency scanning and image releases. The stack was built and verified from a clean environment (PROJECT_STATUS.md, Phase 11). Provider-specific statements in §10–§11 were checked on 2026-10-23; free tiers change often, so check the provider's current terms before relying on them.
+> Status (Phase 12): container images for the backend and frontend, a Compose stack (PostgreSQL, backend, frontend; optional Ollama, Caddy for HTTPS and a demo target), GitHub Actions for tests, images, end-to-end tests on the stack, dependency scanning and image releases. The stack was built and verified from a clean environment (PROJECT_STATUS.md, Phases 11 and 12). Provider-specific statements in §10–§11 were checked on 2026-10-23; free tiers change often, so check the provider's current terms before relying on them.
 
 ## 1. Prerequisites
 
@@ -64,6 +64,8 @@ Base images are pinned to exact versions and updated through Dependabot pull req
 
 - Serves the single-page app (client-side routes fall back to `index.html`, which is never cached; hashed `/assets/` are cached for a year).
 - Forwards `/api/` to `APIFORGE_BACKEND_URL` (default `http://backend:8081`), so the browser talks to **one origin**: the session cookie (`SameSite=Lax`) and the CSRF cookie (`SameSite=Strict`, read by the app) stay first-party. Hosting the static files on a different site from the API is therefore not supported.
+- Resolves the backend's name per request through Docker's DNS (cached 10 s), so a recreated or redeployed backend container with a new address is found without restarting nginx (a startup-time lookup caused 502s until restart; found and fixed in Phase 12).
+- Waits up to `APIFORGE_PROXY_READ_TIMEOUT` (default `300s`) for a backend response. An AI call may take twice `APIFORGE_AI_REQUEST_TIMEOUT` (one retry after invalid model output), so keep this above that; otherwise the browser receives a 504 while the backend is still working (found and fixed in Phase 12).
 - Forwards only `GET /actuator/health` (the aggregated status, no details) of the management endpoints; every other `/actuator` path is a 404 at nginx.
 - Sets security headers: a Content-Security-Policy without inline or `eval` scripts (`script-src 'self'`; inline styles are allowed for the UI components), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`; hides its version.
 - **Client address**: nginx replaces `X-Forwarded-For`/`X-Forwarded-Proto` with its own view unless `APIFORGE_PROXY_TRUSTED=true`. Set it to `true` only when users can reach nginx **solely** through Caddy or a load balancer; otherwise a client could choose the address used for rate limits and the audit log (found and fixed in Phase 11). Behind Caddy without the flag, every user appears with Caddy's address and shares one rate-limit bucket.
@@ -84,6 +86,7 @@ Base images are pinned to exact versions and updated through Dependabot pull req
 | `APIFORGE_COOKIE_SECURE` | `false` (dev), `true` (prod, Compose) | `true` | `Secure` session and CSRF cookies. `false` only for `http://localhost` |
 | `APIFORGE_FORWARD_HEADERS_STRATEGY` | `native` (prod) | `native` | Honour `X-Forwarded-*` from private-network proxies (client IP for rate limits and audit, HTTPS scheme) |
 | `APIFORGE_PROXY_TRUSTED` | `false` | `true` behind Caddy or a load balancer only (§2.2) | Whether nginx passes on client-supplied forwarding headers |
+| `APIFORGE_PROXY_READ_TIMEOUT` | `300s` | more than 2 × `APIFORGE_AI_REQUEST_TIMEOUT` (§2.2) | How long nginx waits for the backend |
 | `APIFORGE_AUTH_REGISTRATION_ENABLED` | `true` | `false` for a private installation once accounts exist | Self-registration |
 | `APIFORGE_CORS_ALLOWED_ORIGINS` | empty | empty (same origin) | Only when an approved UI runs on another origin |
 | `APIFORGE_SESSION_IDLE_TIMEOUT` / `_ABSOLUTE_TIMEOUT` | `30m` / `12h` | as required | Session lifetimes |
@@ -175,12 +178,13 @@ Deployment from a release: on the server, set `APIFORGE_IMAGE_TAG`, replace `bui
 
 ## 9. Ollama: local versus remote
 
-| Model | Download | Memory to run | CPU-only latency (8 cores) | With a GPU |
+| Model | Download | Memory to run | CPU only | With a GPU |
 |---|---|---|---|---|
-| `llama3.2:3b` | ≈ 2 GB | ≈ 4 GB RAM, or ≥ 4 GB VRAM | tens of seconds per answer | a few seconds |
-| `qwen2.5:7b` (default) | ≈ 4.7 GB | ≈ 8 GB RAM, or ≥ 6 GB VRAM | often over a minute | 5–35 s (measured, docs/AI_EVALUATION.md) |
+| `llama3.2:3b` | ≈ 2 GB | ≈ 4 GB RAM, or ≥ 4 GB VRAM | 167–209 s per test-suggestion request (measured in the `ai` profile, Docker VM with 16 vCPU and 8 GB) | a few seconds |
+| `qwen2.5:7b` (default) | ≈ 4.7 GB | ≈ 8 GB RAM, or ≥ 6 GB VRAM | slower than `llama3.2:3b` (not measured) | 5–35 s (measured, docs/AI_EVALUATION.md) |
 
 - **Local** (Ollama on the same machine, natively or in the `ai` profile): simplest and private. The machine needs the model's memory **in addition to** the stack (backend ≈ 0.5–1 GB, PostgreSQL ≈ 0.2 GB, nginx negligible). Docker Desktop's VM memory limit applies to the `ai` profile; GPU use in a container needs the NVIDIA Container Toolkit and a `gpus: all` override. On Windows and macOS a native Ollama with `APIFORGE_STACK_OLLAMA_URL=http://host.docker.internal:11434` often uses the GPU more easily.
+- **CPU-only timeouts**: the defaults (`APIFORGE_AI_REQUEST_TIMEOUT=120s`, `APIFORGE_PROXY_READ_TIMEOUT=300s`) suit a GPU. On CPU only, set for example `APIFORGE_AI_REQUEST_TIMEOUT=600s` and `APIFORGE_PROXY_READ_TIMEOUT=1300s`; with the defaults, CPU-only suggestions end in a clean "did not answer within the request timeout" error (verified in Phase 12). With those settings the `ai` profile (model pulled into the `ollama` volume, port not published) passed the AI end-to-end journey.
 - **Remote** (a GPU server elsewhere): needed when the application host is small. Free and entry-level cloud instances do not have the memory for a 3–7 B model at useful speed, and GPU instances are billed by the hour; budget accordingly or disable AI (`APIFORGE_AI_ENABLED=false` — everything else keeps working).
 - **Keep the model endpoint private**: Ollama has no authentication. Never publish port 11434 (the Compose stack does not). For a remote model server, connect the two hosts over a private network or VPN (cloud VPC, WireGuard, Tailscale) and point `OLLAMA_BASE_URL` at the private address; restrict the model host's firewall to the backend's address. `OLLAMA_BASE_URL` must not carry credentials (rejected at startup), so protection is at the network level. Prompts contain redacted test data only (docs/AI.md), but the endpoint would still let anyone use the GPU.
 

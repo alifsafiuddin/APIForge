@@ -213,7 +213,7 @@ The full reference with production values: [docs/DEPLOYMENT.md §3](docs/DEPLOYM
 AI is optional. To use it:
 
 1. Install Ollama (https://ollama.com, tested with 0.40.8) and pull a model: `ollama pull qwen2.5:7b` (default; needs about 8 GB RAM or a 6 GB GPU) or `ollama pull llama3.2:3b` (smaller machines, set `APIFORGE_AI_MODEL=llama3.2:3b`).
-2. Point APIForge at it: from source, `OLLAMA_BASE_URL=http://localhost:11434` (the default); with Docker, `APIFORGE_STACK_OLLAMA_URL=http://host.docker.internal:11434` — or run Ollama in the stack with `docker compose --profile ai up -d` (pulls the model into a persistent volume; the image is about 3.4 GB).
+2. Point APIForge at it: from source, `OLLAMA_BASE_URL=http://localhost:11434` (the default); with Docker, `APIFORGE_STACK_OLLAMA_URL=http://host.docker.internal:11434` — or run Ollama in the stack with `docker compose --profile ai up -d` (pulls the model into a persistent volume; the image is about 3.4 GB). Without a usable GPU, raise the timeouts as described in [DEPLOYMENT.md §9](docs/DEPLOYMENT.md#9-ollama-local-versus-remote): on CPU only, one test-suggestion request with `llama3.2:3b` took 167–209 s here.
 3. The header chip shows the model and whether it is ready. Use **Suggest tests** on an endpoint in the Tests tab, and **Explain with AI** on a failed result.
 
 Never expose Ollama's port to the internet: it has no authentication. What the model sees, how answers are validated, and hardware guidance: [docs/AI.md](docs/AI.md); measured quality and latency of both models: [docs/AI_EVALUATION.md](docs/AI_EVALUATION.md).
@@ -267,7 +267,7 @@ Threat model and every control with its test: [docs/SECURITY.md](docs/SECURITY.m
 - **Single backend instance**: sessions and rate limits are kept in memory; a restart signs users out. Horizontal scaling would need shared session and rate-limit storage.
 - **HTTP/JSON REST only**: OpenAPI 3.0/3.1; no Swagger 2.0, GraphQL, gRPC or WebSockets; multi-file specifications must be bundled; at most 500 tests per run.
 - **Specification coverage, not code coverage**: it measures what the tests exercise of the documented contract.
-- **AI quality depends on the model and hardware**: suggestions need review (enforced). Measured with `qwen2.5:7b` on a 6 GB laptop GPU: explanations median 16 s (max 26 s), suggestions median 33 s; CPU-only inference is much slower.
+- **AI quality depends on the model and hardware**: suggestions need review (enforced). Measured with `qwen2.5:7b` on a 6 GB laptop GPU: explanations median 16 s (max 26 s), suggestions median 33 s. CPU only (`llama3.2:3b` in the `ai` profile): 167–209 s per suggestion request, which needs longer timeouts.
 - **No e-mail features**: no password reset by e-mail; e-mail addresses cannot be changed.
 - **Verified on one machine**: Windows 11 with Docker Desktop; browser tests in Chromium-based Microsoft Edge. GitHub Actions workflows are linted but their first run happens on GitHub.
 - **Hosting**: no free tier reviewed offers a dependable database plus the memory for local AI ([DEPLOYMENT.md §11](docs/DEPLOYMENT.md#11-free-tier-limitations-checked-2026-10-23)).
@@ -282,6 +282,7 @@ Threat model and every control with its test: [docs/SECURITY.md](docs/SECURITY.m
 | An environment's base URL is refused as private | Intended: only public addresses are allowed. Locally, use the `demo` profile's `http://warehouse-lab:8090` (with `APIFORGE_DEMO_TARGET_ENABLED=true`) or, from source, `http://127.0.0.1:8090` |
 | AI shows "Unavailable" in the Docker stack | Ollama runs on your machine: set `APIFORGE_STACK_OLLAMA_URL=http://host.docker.internal:11434` and recreate the backend (`docker compose up -d backend`). On Linux, Ollama must listen on an address the container can reach |
 | AI shows "Model missing" | `ollama pull <APIFORGE_AI_MODEL>` |
+| AI requests fail with "The model did not answer within the request timeout." (or an HTTP 504) | The model runs too slowly for the defaults, typically on CPU only. Raise `APIFORGE_AI_REQUEST_TIMEOUT` (e.g. `600s`) and `APIFORGE_PROXY_READ_TIMEOUT` to more than twice that (e.g. `1300s`), then `docker compose up -d backend frontend` |
 | "Invalid e-mail or password" although the password is right | Five failed attempts lock sign-in for 15 minutes; wait |
 | "External reference … is not supported" on import | Bundle the specification into one file (e.g. `npx @redocly/cli bundle openapi.yaml -o bundled.yaml`) |
 | Port 8080 or 5432 in use | Change `APIFORGE_HTTP_PORT` or `APIFORGE_DB_PORT` in `.env` |
