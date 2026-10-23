@@ -9,7 +9,8 @@ const RUN = process.env.E2E_RUN ?? Date.now().toString(36)
 export const USER = { email: `e2e-${RUN}@example.test`, name: 'E2E Tester', password: 'quartz-meadow-signal-58' }
 
 export const SPEC_PATH = fileURLToPath(new URL('../samples/warehouse-lab-openapi.yaml', import.meta.url))
-export const LAB_URL = 'http://127.0.0.1:8090'
+/** The sample API as the backend reaches it: on this machine, or the demo profile's container (http://warehouse-lab:8090). */
+export const LAB_URL = process.env.E2E_LAB_URL ?? 'http://127.0.0.1:8090'
 /** The sample server's documented demo key; it protects nothing but the sample. */
 export const LAB_KEY = 'lab-demo-key'
 

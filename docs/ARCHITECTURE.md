@@ -258,19 +258,20 @@ Untrusted content (response bodies, spec descriptions, AI text) is always render
 ```
 /
 ├── README.md
-├── docker-compose.yml           # postgres (the full-stack topology is planned, DEPLOYMENT.md §2)
+├── docker-compose.yml           # the stack: postgres, backend, frontend; profiles ai, tls, demo (DEPLOYMENT.md §2)
 ├── .env.example                 # documented variables, no real secrets
-├── .github/workflows/ci.yml
+├── .github/                     # workflows: ci, dependencies, release; dependabot
+├── deploy/caddy/Caddyfile       # HTTPS for the tls profile
 ├── docs/                        # this documentation
 ├── backend/                     # Maven (wrapper), Spring Boot app
-│   ├── pom.xml, mvnw, mvnw.cmd
+│   ├── pom.xml, mvnw, mvnw.cmd, Dockerfile
 │   └── src/{main,test}/...
 │       main/java/com/apiforge/{auth,audit,project,spec,environment,secrets,testcase,
 │                               generation,execution,outbound,validation,coverage,
 │                               ai,dashboard,common,config}
 │       main/resources/db/migration/V*__*.sql
 ├── frontend/                    # Vite React app
-│   ├── package.json, package-lock.json
+│   ├── package.json, package-lock.json, Dockerfile, nginx/ (template, security headers)
 │   └── src/...
 ├── samples/                     # sample OpenAPI documents and the Warehouse Lab API (authorized test target)
 ├── evaluation/ai/               # AI evaluation dataset, runner and results

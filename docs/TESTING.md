@@ -56,9 +56,10 @@
 | Backend build | CI and local | `./mvnw -B verify`: compile with `-Xlint:all` as errors; all tests; ArchUnit; enforcer (Java/Maven versions, dependency convergence) |
 | Backend coverage (JaCoCo) | CI and local | ≥ 80% lines overall; ≥ 90% lines for `outbound`, `validation`, `generation`, `secrets` |
 | Frontend | CI and local | `npm run lint`, `npm run typecheck`, `npm run test:coverage`, `npm run build` |
-| Dependencies | CI: `npm audit --omit=dev --audit-level=high`; QA pass: `npm audit`, OSV-Scanner over the backend SBOM and the lockfiles (QA_REPORT.md) | No known vulnerabilities |
+| Dependencies | CI: `npm audit --omit=dev --audit-level=high`, `dependencies.yml` (OSV-Scanner over the backend SBOM and the lockfiles, also weekly), Dependabot | No known vulnerabilities |
 | Static analysis | QA pass: SpotBugs (max effort, medium threshold), knip | Findings fixed or justified in QA_REPORT.md |
-| End-to-end | Local (needs the full stack; not run in CI yet) | `cd e2e && npx playwright test`, once with Ollama running and once without |
+| End-to-end | CI (`stack` job: the images, the complete Compose stack from a clean environment, AI disabled) and locally (dev servers or the Compose stack, once with Ollama and once without) | `cd e2e && npx playwright test`; against Compose: `E2E_BASE_URL=http://localhost:8080 E2E_LAB_URL=http://warehouse-lab:8090` |
+| Stack | CI and locally | Images build; services healthy; migrations applied; only the aggregated health exposed; no published backend or database port beyond loopback |
 | Warnings | Everywhere | Fixed, not suppressed |
 
 ## 6. Running tests
@@ -165,4 +166,4 @@ Backend: 868 tests (JUnit 5, Testcontainers PostgreSQL 18.6, real HTTP for integ
 | `auth.spec.ts` | Protected page → sign-in (wrong password, then correct) → back to the page; password change signs out a second browser, new password works; account deletion with typed e-mail; sign-out invalidates the server session (replayed cookie rejected) |
 | `safety.spec.ts` | Metadata, alternative-notation, `file:` and IPv4-mapped destinations refused in the environment form; secrets never rendered or returned; destructive actions confirmed, cancel changes nothing, project deletion needs the typed name |
 | `ai.spec.ts` | With Ollama: suggestions stay pending and cannot run. Without Ollama: AI actions disabled with the reason, AI endpoints answer `AI_*` errors, generation, a full run and coverage still work. One of the two is skipped in each run, so the suite is run once with and once without Ollama |
-| `resilience.spec.ts` | Offline and unreachable-backend banners appear and clear; main pages without horizontal scrolling at 390 px, mobile navigation |
+| `resilience.spec.ts` | Offline and unreachable-backend banners appear and clear; main pages without console errors or Content-Security-Policy violations (meaningful against the production image, which sends the CSP); main pages without horizontal scrolling at 390 px, mobile navigation |

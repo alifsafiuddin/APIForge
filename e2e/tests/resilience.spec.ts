@@ -17,6 +17,24 @@ test('offline and unreachable-backend states are explained and clear by themselv
   await expect(page.getByText(/The APIForge backend is not responding/)).toBeHidden()
 })
 
+test('pages render without console errors or Content-Security-Policy violations', async ({ page }) => {
+  const problems: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') problems.push(`console: ${message.text()}`)
+  })
+  page.on('pageerror', (error) => problems.push(`page error: ${error.message}`))
+  await page.addInitScript(() => {
+    document.addEventListener('securitypolicyviolation', (event) => {
+      console.error(`CSP violation: ${event.violatedDirective} ${event.blockedURI}`)
+    })
+  })
+  for (const path of ['/', '/projects', '/settings']) {
+    await page.goto(path)
+    await page.waitForLoadState('networkidle')
+  }
+  expect(problems).toEqual([])
+})
+
 test('the main pages fit a phone screen without horizontal scrolling', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   for (const path of ['/', '/projects', '/settings']) {

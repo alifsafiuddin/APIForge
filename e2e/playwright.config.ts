@@ -8,6 +8,8 @@ import { defineConfig } from '@playwright/test'
  * E2E_BASE_URL     frontend URL (default http://localhost:5173)
  * E2E_BROWSER      "msedge" or "chrome" to use an installed browser; default: Playwright's Chromium
  *                  (install it once with `npx playwright install chromium`)
+ * E2E_LAB_URL      the sample API as the backend sees it (default http://127.0.0.1:8090; the Compose
+ *                  demo profile: http://warehouse-lab:8090)
  */
 const baseURL = process.env.E2E_BASE_URL ?? 'http://localhost:5173'
 // One id per run, shared by global setup and the test workers (they inherit the environment).

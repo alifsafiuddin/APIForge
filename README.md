@@ -2,8 +2,9 @@
 
 A full-stack developer tool for **contract-driven API testing**. You import an OpenAPI 3.x specification, explore its endpoints, and generate deterministic test scenarios from its schemas. APIForge AI then runs them against an API you are authorized to test, validates every response against the documented contract, tracks specification coverage, and can ask a **locally hosted** LLM (Ollama) to explain failures.
 
-> **Status: Phase 10 (automated testing and quality assurance) complete** — results in [docs/QA_REPORT.md](docs/QA_REPORT.md).
+> **Status: Phase 11 (Docker, deployment and CI/CD) complete.** QA results: [docs/QA_REPORT.md](docs/QA_REPORT.md).
 > What runs today:
+> - **Containers**: production images for backend and frontend, a Compose stack with PostgreSQL (persistent volume, health-checked startup), optional Ollama, HTTPS via Caddy, and GitHub Actions that build the images and run the end-to-end tests against the stack.
 > - A **dashboard** and per-project **overview** with stored numbers (tests to review, stale tests, last run, coverage snapshot, recent runs) and a setup checklist; **Settings** for display name, password (ends other sessions) and account deletion; a project-wide test finder, run-history filters, confirmation dialogs for irreversible actions, offline and backend-down banners, mobile layouts and accessibility checked with axe.
 > - Registration and sign-in (sessions, CSRF, lockout, rate limiting, audit trail) and private API projects.
 > - **OpenAPI 3.0/3.1 import** with immutable versions and a **specification explorer**.
@@ -14,9 +15,22 @@ A full-stack developer tool for **contract-driven API testing**. You import an O
 > - **Contract validation and reporting**: every response is checked against the active specification — documented status, media type, JSON syntax and the response schema (types, required fields, nested objects, arrays, enums, constraints, formats) — with a JSON path, expected and actual value per finding. Skipped and inconclusive checks are shown as such, never as passes. Runs can be filtered by outcome, results show assertions, the response body with findings marked, and timing, and a run can be compared with an earlier one.
 > - **Secure execution**: test runs (asynchronous, cancellable, per-user limits) and a console for single requests, against an API you are authorized to test. Private, loopback, link-local, multicast and cloud metadata destinations are blocked, DNS is validated before connecting (rebinding-safe), every redirect is re-checked, and secrets are redacted from everything that is stored, returned or logged.
 >
-> Not yet: Docker images for the whole stack and end-to-end tests in CI. See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
+> Not yet: horizontal scaling (single backend instance by design). See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
-## Quick start
+## Run the complete stack with Docker
+
+Everything (PostgreSQL, backend, frontend) in containers, as it is deployed:
+
+```bash
+cp .env.example .env              # PowerShell: Copy-Item .env.example .env
+# In .env set APIFORGE_DB_PASSWORD, APIFORGE_SECRETS_KEY (openssl rand -base64 32)
+# and, for http://localhost only, APIFORGE_COOKIE_SECURE=false
+docker compose up -d --build      # then open http://localhost:8080
+```
+
+Add `--profile ai` for Ollama in a container (or point `APIFORGE_STACK_OLLAMA_URL` at an Ollama on your machine), `--profile demo` with `APIFORGE_DEMO_TARGET_ENABLED=true` for the sample API as a test target, and `--profile tls` with `APIFORGE_DOMAIN` for HTTPS on a server. Production configuration, backups, hosting options and free-tier limits: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+## Quick start (development from source)
 
 ### Prerequisites
 
@@ -165,12 +179,17 @@ See [.env.example](.env.example) and [frontend/.env.example](frontend/.env.examp
 ## Project layout
 
 ```
-backend/     Spring Boot 4.1 (Java 21, Maven Wrapper), package-by-feature: auth/, audit/, project/, spec/,
-             environment/, testcase/, execution/, system/, common/, config/ (+ Flyway migrations V1–V7)
-samples/     Sample OpenAPI documents to import (with source and license)
-frontend/    React 19 + TypeScript 6 + Vite 8 + Tailwind CSS 4 + shadcn/ui + TanStack Query + React Router
-docs/        Architecture, schema, API design, security, testing, deployment, decisions, status
-.github/     CI workflow and Dependabot
+backend/     Spring Boot 4.1 (Java 21, Maven Wrapper), package-by-feature (auth, audit, project, spec,
+             environment, secrets, testcase, generation, execution, outbound, validation, schema, coverage,
+             ai, dashboard, system, common, config), Flyway migrations V1–V13, Dockerfile
+frontend/    React 19 + TypeScript 6 + Vite 8 + Tailwind CSS 4 + shadcn/ui + TanStack Query + React Router;
+             Dockerfile and nginx configuration
+e2e/         Playwright end-to-end tests
+deploy/      Caddy configuration for HTTPS (Compose tls profile)
+samples/     Sample OpenAPI documents and the Warehouse Lab sample API
+evaluation/  AI evaluation dataset, runner and results
+docs/        Architecture, schema, API design, security, testing, deployment, decisions, QA, status
+.github/     CI, dependency scanning, image releases, Dependabot
 ```
 
 ## Documentation
@@ -185,7 +204,7 @@ docs/        Architecture, schema, API design, security, testing, deployment, de
 | [AI_EVALUATION.md](docs/AI_EVALUATION.md) | Measured quality and latency of the AI features |
 | [TESTING.md](docs/TESTING.md) | Test levels, rule catalogue, suites, quality gates, running the tests |
 | [QA_REPORT.md](docs/QA_REPORT.md) | Phase 10 quality-assurance results: commands, outcomes, defects, security checks, limitations |
-| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Prerequisites, Compose topology, configuration, CI/CD |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Compose stack and images, production configuration, health checks, migrations, backup and recovery, CI/CD, Ollama resources, hosting options and free-tier limits, outbound network security, logging and monitoring |
 | [DECISIONS.md](docs/DECISIONS.md) | ADRs and the verified dependency compatibility matrix |
 | [PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | Current phase, milestone checklist, verification results |
 

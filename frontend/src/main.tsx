@@ -1,3 +1,4 @@
+import '@/zod-config'
 import '@/index.css'
 
 import { QueryClientProvider } from '@tanstack/react-query'

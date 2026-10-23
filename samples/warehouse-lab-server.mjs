@@ -1,6 +1,6 @@
 // Warehouse Lab API: a local, authorized target for trying APIForge's execution engine.
 //
-//   node samples/warehouse-lab-server.mjs          (listens on 127.0.0.1:8090 only)
+//   node samples/warehouse-lab-server.mjs          (listens on 127.0.0.1:8090 only; WAREHOUSE_LAB_HOST overrides)
 //
 // It implements samples/warehouse-lab-openapi.yaml with request validation and API-key
 // authentication (header X-API-Key). The key is read from WAREHOUSE_LAB_API_KEY and defaults to
@@ -32,7 +32,8 @@
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 
-const HOST = '127.0.0.1'
+// Loopback by default; the Compose demo profile sets 0.0.0.0 inside its private network.
+const HOST = process.env.WAREHOUSE_LAB_HOST ?? '127.0.0.1'
 const PORT = Number(process.env.WAREHOUSE_LAB_PORT ?? 8090)
 const API_KEY = process.env.WAREHOUSE_LAB_API_KEY ?? 'lab-demo-key'
 const VIOLATIONS = process.env.WAREHOUSE_LAB_VIOLATIONS === '1'

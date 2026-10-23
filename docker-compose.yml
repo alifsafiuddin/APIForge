@@ -1,11 +1,28 @@
-# Local infrastructure for APIForge AI.
-# Phase 1 provides PostgreSQL only; the backend and frontend run from source (see README.md).
-# Settings come from `.env` (copy `.env.example`).
+# APIForge AI — the complete stack (docs/DEPLOYMENT.md).
+#
+#   cp .env.example .env            # then set the required values (APIFORGE_DB_PASSWORD, APIFORGE_SECRETS_KEY)
+#   docker compose up -d --build    # PostgreSQL, backend, frontend → http://localhost:8080
+#
+# Optional profiles:
+#   ai    Ollama in a container, with persistent model storage   docker compose --profile ai up -d
+#   tls   Caddy in front with automatic HTTPS for APIFORGE_DOMAIN  (single-server deployments)
+#   demo  the Warehouse Lab sample API as a trusted test target   (local evaluation only)
+#
+# Development from source needs only the database: `docker compose up -d postgres`.
+# Secrets come from .env at runtime; none is part of any image.
 
 name: apiforge
 
+# Container logs (ECS JSON for the backend) are rotated so a long-running server never fills its disk.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   postgres:
+    logging: *logging
     # Keep in sync with <postgres.image> in backend/pom.xml (used by Testcontainers).
     image: postgres:18.6-alpine
     restart: unless-stopped
@@ -14,7 +31,8 @@ services:
       POSTGRES_USER: ${APIFORGE_DB_USER:-apiforge}
       POSTGRES_PASSWORD: ${APIFORGE_DB_PASSWORD:?Set APIFORGE_DB_PASSWORD in .env (copy .env.example)}
     ports:
-      # Bound to loopback only: the database is not reachable from other machines.
+      # Loopback only, for development from source and local administration: never reachable from
+      # other machines. Production hosts may remove this mapping entirely.
       - "127.0.0.1:${APIFORGE_DB_PORT:-5432}:5432"
     volumes:
       # PostgreSQL 18 images store data under /var/lib/postgresql/<major>/; mount the parent.
@@ -26,5 +44,146 @@ services:
       retries: 10
       start_period: 10s
 
+  backend:
+    logging: *logging
+    # Immutable container: only /tmp (Tomcat's work files) is writable, in memory.
+    read_only: true
+    tmpfs:
+      - /tmp
+    build: ./backend
+    image: apiforge-backend:${APIFORGE_IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      APIFORGE_DB_URL: jdbc:postgresql://postgres:5432/${APIFORGE_DB_NAME:-apiforge}
+      APIFORGE_DB_USER: ${APIFORGE_DB_USER:-apiforge}
+      APIFORGE_DB_PASSWORD: ${APIFORGE_DB_PASSWORD:-}
+      # Required: the prod profile refuses to start without it (openssl rand -base64 32).
+      APIFORGE_SECRETS_KEY: ${APIFORGE_SECRETS_KEY:-}
+      APIFORGE_SECRETS_KEY_ID: ${APIFORGE_SECRETS_KEY_ID:-k1}
+      # true whenever users reach the app over HTTPS (tls profile, cloud); false only for http://localhost.
+      APIFORGE_COOKIE_SECURE: ${APIFORGE_COOKIE_SECURE:-true}
+      APIFORGE_AUTH_REGISTRATION_ENABLED: ${APIFORGE_AUTH_REGISTRATION_ENABLED:-true}
+      APIFORGE_AI_ENABLED: ${APIFORGE_AI_ENABLED:-true}
+      # Seen from inside the container: the ai profile's Ollama by default, or
+      # http://host.docker.internal:11434 for an Ollama running on the host.
+      OLLAMA_BASE_URL: ${APIFORGE_STACK_OLLAMA_URL:-http://ollama:11434}
+      APIFORGE_AI_MODEL: ${APIFORGE_AI_MODEL:-qwen2.5:7b}
+      APIFORGE_AI_REQUEST_TIMEOUT: ${APIFORGE_AI_REQUEST_TIMEOUT:-120s}
+      APIFORGE_AI_MAX_CONCURRENT: ${APIFORGE_AI_MAX_CONCURRENT:-1}
+      APIFORGE_AI_CONTEXT_TOKENS: ${APIFORGE_AI_CONTEXT_TOKENS:-8192}
+      # demo profile only: trust exactly the sample API container (docs/SECURITY.md section 6.3).
+      APIFORGE_OUTBOUND_TRUSTEDTARGETSENABLED: ${APIFORGE_DEMO_TARGET_ENABLED:-false}
+      APIFORGE_OUTBOUND_ALLOW_TRUSTED_IN_PROD: ${APIFORGE_DEMO_TARGET_ENABLED:-false}
+      APIFORGE_OUTBOUND_TRUSTEDTARGETS_0_HOST: warehouse-lab
+      APIFORGE_OUTBOUND_TRUSTEDTARGETS_0_PORT: "8090"
+    extra_hosts:
+      # Lets the backend reach an Ollama running on the host (Docker Desktop defines this already).
+      - "host.docker.internal:host-gateway"
+    # No published port: only the frontend's nginx (and other containers) can reach the backend.
+    expose:
+      - "8081"
+
+  frontend:
+    logging: *logging
+    # Immutable container: nginx renders its configuration into conf.d at start and uses /tmp.
+    read_only: true
+    tmpfs:
+      - /tmp
+      # Written by the non-root nginx user at start.
+      - /etc/nginx/conf.d:mode=1777
+    build: ./frontend
+    image: apiforge-frontend:${APIFORGE_IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      APIFORGE_BACKEND_URL: http://backend:8081
+      # true only when users reach nginx solely through Caddy (tls profile) or a load balancer:
+      # then their X-Forwarded-For is kept; otherwise clients cannot choose their recorded address.
+      APIFORGE_PROXY_TRUSTED: ${APIFORGE_PROXY_TRUSTED:-false}
+    ports:
+      # Loopback by default; the tls profile (or a load balancer) is the public entry point.
+      - "${APIFORGE_HTTP_BIND:-127.0.0.1}:${APIFORGE_HTTP_PORT:-8080}:8080"
+
+  ollama:
+    logging: *logging
+    profiles: ["ai"]
+    image: ollama/ollama:0.40.8
+    restart: unless-stopped
+    environment:
+      OLLAMA_KEEP_ALIVE: 10m
+    volumes:
+      # Models are large (several GB): keep them across container updates.
+      - ollama:/root/.ollama
+    # Never published: the model server has no authentication and is reachable only by the backend.
+    expose:
+      - "11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  ollama-pull:
+    logging: *logging
+    profiles: ["ai"]
+    image: ollama/ollama:0.40.8
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull", "${APIFORGE_AI_MODEL:-qwen2.5:7b}"]
+    restart: "no"
+
+  caddy:
+    logging: *logging
+    read_only: true
+    tmpfs:
+      - /tmp
+    profiles: ["tls"]
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_healthy
+    environment:
+      # Required for this profile: the public host name (Caddy refuses to start without it).
+      APIFORGE_DOMAIN: ${APIFORGE_DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and ACME account: keep them, or Let's Encrypt rate limits may apply after restarts.
+      - caddy-data:/data
+      - caddy-config:/config
+
+  warehouse-lab:
+    logging: *logging
+    read_only: true
+    profiles: ["demo"]
+    image: node:24.22.0-alpine
+    restart: unless-stopped
+    user: node
+    working_dir: /lab
+    environment:
+      WAREHOUSE_LAB_HOST: 0.0.0.0
+    volumes:
+      - ./samples:/lab:ro
+    command: ["node", "warehouse-lab-server.mjs"]
+    expose:
+      - "8090"
+
 volumes:
   pgdata:
+  ollama:
+  caddy-data:
+  caddy-config:
