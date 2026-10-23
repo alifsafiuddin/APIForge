@@ -288,6 +288,7 @@ Threat model and every control with its test: [docs/SECURITY.md](docs/SECURITY.m
 | Port 8080 or 5432 in use | Change `APIFORGE_HTTP_PORT` or `APIFORGE_DB_PORT` in `.env` |
 | Signed out after restarting the backend | Expected: sessions are in memory |
 | Backend tests fail with "Could not find a valid Docker environment" | Start Docker; Testcontainers needs it |
+| The backend started from source exits with "Segmentation fault" or exception code `0xc0000005` | A crash inside the local Java runtime, not the application (seen with JDK 21.0.8). Install the current Java 21 update, or use the Docker stack |
 
 ## Documentation
 

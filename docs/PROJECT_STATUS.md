@@ -39,6 +39,27 @@ Clean clone of commit `9d07910` into an empty directory, fresh `.env` per the RE
 | Security scans | ✅ OSV-Scanner 2.6.0 on the CycloneDX SBOM and both lockfiles: no issues; gitleaks: no unreviewed findings in history or working tree; actionlint 1.7.12: no findings |
 | README claims | ✅ audited below |
 
+### Every phase re-checked on the final code (2026-10-23)
+
+Each phase's own completion-check script was run again against the final backend jar (dev profile, the development database, Vite, the Warehouse Lab sample and native Ollama). Scripts written before the Phase 9 redesign were adapted only where the navigation or wording changed (opening a project now lands on its Overview; status messages read "The test expects 400, but the response is 201."; generator v2); no expectation about behaviour was relaxed.
+
+| Phase | Completion check | Result |
+|---|---|---|
+| 0 | Design documents, Mermaid diagrams, threat model, decisions | ✅ all 8 documents present; architecture and ER diagrams; 30 ADRs with the dependency matrix |
+| 1 | Builds, PostgreSQL, Flyway, health, frontend → backend, no secrets, clean checkout | ✅ covered by the clean-clone run above (build, V1–V13, health UP, Vite proxy, gitleaks) |
+| 2 | Registration, login, invalid credentials, unauthorized and cross-user access, validation, persistence | ✅ 12/12 |
+| 3 | Import the real Petstore sample, verify the inventory, refresh, persistence | ✅ 15/15 (19 endpoints) |
+| 4 | Generated tests valid, explainable and repeatable | ✅ 19/19 (128 tests; regeneration 0 new / 0 updated, edits kept) |
+| 5 | Success, HTTP errors, timeouts, malformed responses, blocked destinations, redirects, redaction | ✅ 25/25 |
+| 6 | Reported failures equal the actual contract violations | ✅ 27/27 (127/1 normal, 115/13 violations mode) |
+| 7 | Dashboard equals hand-calculated metrics | ✅ 48/48 |
+| 8 | Live model, Ollama stopped, malformed output | ✅ 27/27 (11 live with `qwen2.5:7b`, 9 offline, 7 malformed) |
+| 9 | Every major workflow with a real account | ✅ 73/73, axe: no violations on 13 pages, no mobile overflow |
+| 10 | Mandatory test suites | ✅ clean-clone results above (868 backend, 125 frontend, e2e in both AI modes) |
+| 11 | Complete stack from a clean environment | ✅ clean-clone results above (36/36 stack checks, `ai` profile) |
+
+During this re-check the locally installed JVM (Oracle JDK 21.0.8) crashed once with an access violation inside JIT-compiled code (no `hs_err` file; Windows reports module "unknown", as in one earlier crash on 2026-10-21). Java code cannot cause this, the container images (Temurin 21.0.12) never showed it, and the interrupted check passed after a restart. See the known limitations.
+
 ### README claims audit
 
 | Claim | Evidence |
@@ -71,6 +92,7 @@ Clean clone of commit `9d07910` into an empty directory, fresh `.env` per the RE
 - **AI depends on hardware**: CPU-only inference needs longer timeouts (167–209 s per suggestion request with `llama3.2:3b`); suggestions always need review.
 - **Verified on one machine** (Windows 11, Docker Desktop, Edge). No deployment to a real cloud provider or Let's Encrypt certificate was performed; no free tier reviewed offers a dependable database plus memory for local AI.
 - **No e-mail features** (password reset, e-mail change).
+- **Local JVM crash (environment)**: the from-source backend on this machine's Oracle JDK 21.0.8 crashed twice in several days of running (native access violation in JIT code). Updating the local JDK to the current Java 21 update is advised; the Docker images use Temurin 21.0.12.
 - Login (10/min) and registration (5/min) rate limits apply per IP, so back-to-back end-to-end runs need a minute between them.
 
 ## Phase 11 summary (previous phase)
