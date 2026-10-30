@@ -7,7 +7,7 @@
 # (true only when nginx is reachable solely through a trusted proxy) and APIFORGE_PROXY_READ_TIMEOUT
 # (default 300s; must exceed twice the backend's AI request timeout). No secret is involved.
 
-FROM node:24.22.0-alpine AS build
+FROM node:26.12.1-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
