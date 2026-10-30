@@ -115,7 +115,7 @@ services:
   ollama:
     logging: *logging
     profiles: ["ai"]
-    image: ollama/ollama:0.40.8
+    image: ollama/ollama:0.40.11
     restart: unless-stopped
     environment:
       OLLAMA_KEEP_ALIVE: 10m
@@ -135,7 +135,7 @@ services:
   ollama-pull:
     logging: *logging
     profiles: ["ai"]
-    image: ollama/ollama:0.40.8
+    image: ollama/ollama:0.40.11
     depends_on:
       ollama:
         condition: service_healthy
