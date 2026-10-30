@@ -172,7 +172,7 @@ services:
     logging: *logging
     read_only: true
     profiles: ["demo"]
-    image: node:24.22.0-alpine
+    image: node:26.12.1-alpine
     restart: unless-stopped
     user: node
     working_dir: /lab
