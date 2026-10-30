@@ -6,7 +6,7 @@
 # No configuration or secret is baked in: everything comes from environment variables at runtime
 # (docs/DEPLOYMENT.md, section 3).
 
-FROM eclipse-temurin:21.0.12.1_1-jdk-alpine AS build
+FROM eclipse-temurin:24.0.2_12-jdk-alpine AS build
 WORKDIR /workspace
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
@@ -16,7 +16,7 @@ COPY src/ src/
 RUN --mount=type=cache,target=/root/.m2 sh mvnw -B -ntp -q package -DskipTests -Djacoco.skip=true \
     && java -Djarmode=tools -jar target/apiforge-backend-*.jar extract --layers --launcher --destination /workspace/extracted
 
-FROM eclipse-temurin:21.0.12.1_1-jre-alpine
+FROM eclipse-temurin:24.0.2_12-jre-alpine
 RUN addgroup -S -g 10001 apiforge && adduser -S -D -H -u 10001 -G apiforge apiforge
 WORKDIR /app
 # One layer per Spring Boot layer: dependencies change rarely, the application often.
