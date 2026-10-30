@@ -68,7 +68,7 @@ class DestinationPolicyTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"169.254.169.254", "127.0.0.1", "10.1.2.3", "192.168.0.10", "::1", "fd00:ec2::254",
-            "::ffff:169.254.169.254", "64:ff9b::a9fe:a9fe", "0.0.0.0"})
+            "::ffff:169.254.169.254", "64:ff9b::a9fe:a9fe", "::ffff:0:a9fe:a9fe", "0.0.0.0"})
     void namesResolvingToBlockedAddressesAreRefused(String address) {
         dns.put("rebind.example.com", List.of(address));
 
@@ -78,7 +78,7 @@ class DestinationPolicyTest {
     @ParameterizedTest
     @ValueSource(strings = {"http://127.0.0.1/", "http://169.254.169.254/latest/meta-data/", "http://[::1]/",
             "http://[::ffff:127.0.0.1]/", "http://[::ffff:a9fe:a9fe]/", "http://10.0.0.1/", "http://0.0.0.0/",
-            "http://[fe80::1]/", "http://224.0.0.1/"})
+            "http://[fe80::1]/", "http://224.0.0.1/", "http://[::ffff:0:7f00:1]/", "http://[::ffff:0:169.254.169.254]/"})
     void blockedLiteralsAreRefusedWithoutDns(String url) {
         assertThat(blocked(policy(), url)).isEqualTo(Reason.BLOCKED_ADDRESS);
         assertThat(lookups.get()).isZero();

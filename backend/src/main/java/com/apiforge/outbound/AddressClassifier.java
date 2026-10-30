@@ -77,6 +77,7 @@ public final class AddressClassifier {
             range("fc00::", 7, true, "unique-local (private) address"),
             range("ff00::", 8, false, "multicast address"),
             range("2001:db8::", 32, false, "documentation address"),
+            range("3fff::", 20, false, "documentation address"),
             range("2001::", 32, false, "Teredo tunnel address"),
             range("100::", 64, false, "discard-only address"));
 
@@ -111,8 +112,9 @@ public final class AddressClassifier {
 
     /**
      * The IPv4 address carried inside an IPv6 address: IPv4-mapped ({@code ::ffff:a.b.c.d}),
-     * IPv4-compatible ({@code ::a.b.c.d}), NAT64 ({@code 64:ff9b::/96}, {@code 64:ff9b:1::/48})
-     * or 6to4 ({@code 2002:wwxx:yyzz::/16}); otherwise {@code null}.
+     * IPv4-compatible ({@code ::a.b.c.d}), IPv4-translated ({@code ::ffff:0:a.b.c.d}, SIIT),
+     * NAT64 ({@code 64:ff9b::/96}, {@code 64:ff9b:1::/48}) or 6to4 ({@code 2002:wwxx:yyzz::/16});
+     * otherwise {@code null}.
      */
     static byte[] embeddedIpv4(byte[] v6) {
         boolean firstTenZero = true;
@@ -121,6 +123,13 @@ public final class AddressClassifier {
         }
         if (firstTenZero && ((v6[10] == (byte) 0xFF && v6[11] == (byte) 0xFF) || (v6[10] == 0 && v6[11] == 0
                 && !(v6[12] == 0 && v6[13] == 0 && v6[14] == 0 && (v6[15] == 0 || v6[15] == 1))))) {
+            return Arrays.copyOfRange(v6, 12, 16);
+        }
+        boolean firstEightZero = true;
+        for (int index = 0; index < 8; index++) {
+            firstEightZero &= v6[index] == 0;
+        }
+        if (firstEightZero && v6[8] == (byte) 0xFF && v6[9] == (byte) 0xFF && v6[10] == 0 && v6[11] == 0) {
             return Arrays.copyOfRange(v6, 12, 16);
         }
         if (v6[0] == 0 && v6[1] == 0x64 && v6[2] == (byte) 0xFF && v6[3] == (byte) 0x9B) {

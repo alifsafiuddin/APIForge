@@ -115,7 +115,7 @@ flowchart TD
 
 ### 6.2 Blocked destinations (default, all profiles)
 
-Addresses are normalized first: IPv4-mapped and IPv4-compatible IPv6 addresses are unwrapped, and NAT64 (`64:ff9b::/96`) and 6to4 (`2002::/16`) embedded IPv4 addresses are extracted and checked. Hosts are parsed by `java.net.URI` plus an explicit rejection of non-canonical numeric forms (`0x7f.1`, `017700000001`, `2130706433`, and so on).
+Addresses are normalized first: IPv4-mapped (`::ffff:a.b.c.d`), IPv4-compatible (`::a.b.c.d`) and IPv4-translated (`::ffff:0:a.b.c.d`, SIIT) IPv6 addresses are unwrapped, and NAT64 (`64:ff9b::/96`, `64:ff9b:1::/48`) and 6to4 (`2002::/16`) embedded IPv4 addresses are extracted and checked. (The IPv4-translated form was classified as public until 2026-10-29; found in a review and fixed test-first.) Hosts are parsed by `java.net.URI` plus an explicit rejection of non-canonical numeric forms (`0x7f.1`, `017700000001`, `2130706433`, and so on).
 
 | Range | Reason |
 |---|---|
@@ -125,7 +125,7 @@ Addresses are normalized first: IPv4-mapped and IPv4-compatible IPv6 addresses a
 | `100.64.0.0/10` | CGNAT (includes Alibaba metadata `100.100.100.200`) |
 | `169.254.0.0/16`, `fe80::/10` | link-local (includes AWS/GCP/Azure metadata `169.254.169.254`) |
 | `fc00::/7` | IPv6 unique-local (includes AWS IPv6 metadata `fd00:ec2::254`) |
-| `192.0.0.0/24`, `192.0.2.0/24`, `198.18.0.0/15`, `198.51.100.0/24`, `203.0.113.0/24`, `2001:db8::/32` | IETF special-purpose and documentation |
+| `192.0.0.0/24`, `192.0.2.0/24`, `198.18.0.0/15`, `198.51.100.0/24`, `203.0.113.0/24`, `2001:db8::/32`, `3fff::/20`, `2001::/32` (Teredo), `100::/64` | IETF special-purpose and documentation |
 | `224.0.0.0/4`, `ff00::/8`, `240.0.0.0/4`, `255.255.255.255/32` | multicast, reserved, broadcast |
 | Hostnames `localhost`, `*.localhost`, `metadata.google.internal`, `metadata`, `*.internal` | Name-based block, checked before DNS |
 
@@ -225,22 +225,33 @@ Other client settings:
 
 ## 11. Threat model summary (STRIDE)
 
-| # | Threat | Category | Severity | Primary controls | Verified by (planned) |
+| # | Threat | Category | Severity | Primary controls | Verified by |
 |---|---|---|---|---|---|
-| T1 | SSRF to internal services or metadata via base URL | Info disclosure / EoP | Critical | §6.2 blocklist, guarded DNS, trusted list | `AddressClassifierTest` (table), `OutboundGuardIT` |
-| T2 | DNS rebinding between check and connect | Info disclosure | High | Resolver used for connect is the validated one | `GuardedDnsResolverTest` with fake DNS returning different answers per call |
-| T3 | Redirect to internal address | Info disclosure | High | Manual redirects, revalidated per hop | WireMock IT: public → 302 → 127.0.0.1 is blocked |
+| T1 | SSRF to internal services or metadata via base URL | Info disclosure / EoP | Critical | §6.2 blocklist, guarded DNS, trusted list | ✅ `AddressClassifierTest`, `UrlGuardTest`, `DestinationPolicyTest`, `OutboundHttpClientTest`, `ExecutionIntegrationTest` |
+| T2 | DNS rebinding between check and connect | Info disclosure | High | Resolver used for connect is the validated one | ✅ `DestinationPolicyTest.rebindingCannotChangeTheConnectedAddress` (fake DNS answering differently per call) |
+| T3 | Redirect to internal address | Info disclosure | High | Manual redirects, revalidated per hop | ✅ `OutboundHttpClientTest` (`redirectsToBlockedDestinationsAreRefusedBeforeConnecting`, `crossOriginRedirectsDropCredentials`, `redirectChainsAreLimited`), local test server |
 | T4 | External `$ref` fetch during import | SSRF / LFI | High | §5 reference guard before parsing | ✅ `SpecificationAnalyzerTest`, `SpecificationImportIntegrationTest` (0 outbound requests) |
 | T5 | IDOR across projects | Info disclosure / Tampering | High | Ownership checks, 404, composite FKs | ✅ `CrossUserAccessIntegrationTest`, `SchemaIntegrationTest` |
-| T6 | Secret leakage (API, logs, history, AI) | Info disclosure | High | §7 | Redaction unit tests, log-capture IT, API response IT |
+| T6 | Secret leakage (API, logs, history, AI) | Info disclosure | High | §7 | ✅ `RedactorAndEvaluatorTest`, `SecretLoggingIntegrationTest` (captured logs), `ExecutionIntegrationTest`, `AiRulesTest` |
 | T7 | CSRF on state-changing endpoints | Tampering | Medium | CSRF tokens | ✅ `AuthIntegrationTest`, `ApiExceptionHandlerTest` |
 | T8 | Credential stuffing | Spoofing | Medium | Lockout, rate limit, bcrypt, uniform errors | ✅ `AuthIntegrationTest`, `RestrictedAuthConfigurationIntegrationTest` |
-| T9 | XSS via spec/response/AI text | Tampering | Medium | Text rendering, CSP | Frontend tests with malicious payloads |
-| T10 | DoS via huge spec, YAML bomb, huge or slow responses, regex | DoS | Medium | §5, §6.4 | Limit unit tests, slow-target IT |
-| T11 | Prompt injection leading to harmful action | Tampering / EoP | Medium | No action path, review gate, output validation | `AiOutputValidatorTest`, review-gate IT |
-| T12 | False "passed" verdict | Integrity | High | Outcome rules in [ARCHITECTURE.md](ARCHITECTURE.md) §5 | `OutcomeEvaluatorTest` (exhaustive table) |
-| T13 | Using the tool to attack third parties | Abuse | Medium | Policy defaults, rate limits, no fuzzing, notice | Policy ITs |
-| T14 | Compromised dependency or action | Tampering | Medium | §10 | CI configuration review |
+| T9 | XSS via spec/response/AI text | Tampering | Medium | Text rendering (no HTML injection), CSP `script-src 'self'` | ◐ `SchemaView.test.tsx` (markup in specification text), CSP check in the e2e suite; no dedicated payload suite |
+| T10 | DoS via huge spec, YAML bomb, huge or slow responses, regex | DoS | Medium | §5, §6.4 | ✅ `RequestSizeLimitFilterTest`, `SpecificationImportIntegrationTest`, `OutboundHttpClientTest` (size and time limits), `SchemaValidatorTest` (guarded patterns) |
+| T11 | Prompt injection leading to harmful action | Tampering / EoP | Medium | No action path, review gate, output validation | ✅ `AiRulesTest`, `AiIntegrationTest` (review gate, malformed output) |
+| T12 | False "passed" verdict | Integrity | High | Outcome rules in [ARCHITECTURE.md](ARCHITECTURE.md) §5 | ✅ `RedactorAndEvaluatorTest`, `ContractValidatorTest` |
+| T13 | Using the tool to attack third parties | Abuse | Medium | Policy defaults, per-user rate and concurrency limits, no fuzzing, notice, registration switch | ✅ `ExecutionIntegrationTest`, `RestrictedAuthConfigurationIntegrationTest`; see residual risk R1 |
+| T14 | Compromised dependency or action | Tampering | Medium | §10 | CI configuration (SHA-pinned actions, OSV-Scanner, gitleaks, Dependabot); reviewed, not a test |
+
+### 11.1 Residual risks
+
+Controls reduce these risks; they do not remove them.
+
+| # | Risk | Why it remains | Mitigation |
+|---|---|---|---|
+| R1 | A publicly reachable instance with open self-registration lets anyone send HTTP requests to public hosts through it | Executing requests against user-chosen APIs is the product; the guard stops internal destinations, not misuse against public ones | For a public demo set `APIFORGE_AUTH_REGISTRATION_ENABLED=false` after creating the accounts you need; keep the per-user rate and concurrency limits; monitor `OUTBOUND_BLOCKED` audit events |
+| R2 | Block messages name the category of a resolved address (for example "resolves to a private network address"), which lets a signed-in user learn whether an internal host name exists | The category explains the refusal to legitimate users; the address itself is never shown | Accepted. Restrict who can register (R1); internal DNS zones should not be resolvable from the application host where possible |
+| R3 | Networks with unusual address translation (SIIT, NAT64 with non-standard prefixes) or new special-purpose ranges | The blocklist covers the IANA special-purpose ranges and the standard embeddings, not every operator's translation prefix | Egress firewall on the host (DEPLOYMENT.md §12) as the second layer |
+| R4 | Trusted targets bypass the private-range block for exact host:port pairs | Needed for local development and the demo profile | Off by default; refused in `prod` without an explicit acknowledgement |
 
 ## 12. Reporting
 

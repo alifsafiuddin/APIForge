@@ -27,7 +27,7 @@ Verified on **2026-10-20** (Phase 0) and updated with the versions actually reso
 | RgxGen (`com.github.curious-odd-man:rgxgen`) | **3.1** | ✅ Phase 4: strings matching a schema `pattern` for generated test data. Apache 2.0, released 2025-08-18, no runtime dependencies; seeded `generate(RandomGenerator)` keeps output deterministic (ADR-025) |
 | openapi-request-validator-core (`com.atlassian.oai`) | **3.0.0** | Successor of `swagger-request-validator-core` (relocated). Built for Java 21, Spring 7.0.7, Jackson 2.21.3, networknt json-schema-validator 2.0.1, swagger-parser 2.1.41. We override swagger-parser to 2.1.48 and verify with tests (patch-level, same API). **Not used:** ADR-027 replaced it with the project's own validator |
 | ArchUnit | 1.5.1 | Test only; rules in `ArchitectureTest` |
-| WireMock | Boot-compatible 3.x | Test only |
+| WireMock | — | **Not used**: outbound tests run against local JDK `HttpServer` instances (`OutboundHttpClientTest`) |
 | React | 19.3.x | npm latest |
 | Vite | 8.3.x | npm latest; Node ≥ 22.12 |
 | TypeScript | **6.0.3** (not 7.0) | Pinned by the official `create-vite` 9.3 React template |
@@ -35,7 +35,7 @@ Verified on **2026-10-20** (Phase 0) and updated with the versions actually reso
 | shadcn/ui | CLI 4.22.1 via `npx` only (not a dependency) | Preset `radix-nova`. Components copied into `src/components/ui` (unified `radix-ui` package, `cn` helper from shadcn-ui/cn). Its `tailwind.css` is vendored (ADR-023) |
 | React Router | 8.5.x (data mode) | Requires Node ≥ 22.22 |
 | TanStack Query | 5.10x | npm latest |
-| Recharts | 3.10.x | npm latest |
+| Recharts | — | **Not used**: coverage and dashboard figures are shown as numbers, tables and progress bars, which needed no chart library |
 | react-hook-form / @hookform/resolvers / zod | 7.90.0 / **5.9.2** / 4.6.x | resolvers 6.0.0 has an unresolvable optional-peer conflict (`effect` 3 vs 4) under npm 10; 5.9.2 supports zod 4 |
 | sonner | 2.0.x | Toasts (shadcn component, without `next-themes`) |
 | Vitest / Testing Library / MSW | 5.0.x / 16.3.x / latest | Vitest peer supports Vite 8 |

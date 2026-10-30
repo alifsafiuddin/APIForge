@@ -54,7 +54,7 @@
 | Gate | Where | Rule |
 |---|---|---|
 | Backend build | CI and local | `./mvnw -B verify`: compile with `-Xlint:all` as errors; all tests; ArchUnit; enforcer (Java/Maven versions, dependency convergence) |
-| Backend coverage (JaCoCo) | CI and local | ≥ 80% lines overall; ≥ 90% lines for `outbound`, `validation`, `generation`, `secrets` |
+| Backend coverage (JaCoCo) | CI and local, `jacoco:check` in `verify` | ≥ 80% lines overall; ≥ 90% lines for `outbound`, `validation`, `generation` (each sub-package), `secrets`. Before 2026-10-29 these were only reported, not enforced |
 | Frontend | CI and local | `npm run lint`, `npm run typecheck`, `npm run test:coverage`, `npm run build` |
 | Dependencies | CI: `npm audit --omit=dev --audit-level=high`, `dependencies.yml` (OSV-Scanner over the backend SBOM and the lockfiles, also weekly), Dependabot | No known vulnerabilities |
 | Static analysis | QA pass: SpotBugs (max effort, medium threshold), knip | Findings fixed or justified in QA_REPORT.md |
@@ -65,7 +65,7 @@
 ## 6. Running tests
 
 ```bash
-# Backend: 868 tests (JUnit 5, Testcontainers PostgreSQL 18.6, real HTTP for integration tests). Docker must be running.
+# Backend: 875 tests (JUnit 5, Testcontainers PostgreSQL 18.6, real HTTP for integration tests). Docker must be running.
 cd backend && ./mvnw verify              # Windows: .\mvnw.cmd verify
 
 # Frontend: 125 tests (Vitest, Testing Library, MSW)
@@ -80,15 +80,15 @@ npx playwright test                      # starts the Warehouse Lab sample API i
 
 ## 7. Tests implemented so far (Phases 1–9)
 
-Backend: 868 tests (JUnit 5, Testcontainers PostgreSQL 18.6, real HTTP for integration tests). Frontend: 125 tests (Vitest, Testing Library, MSW). Results of the latest run are recorded in [PROJECT_STATUS.md](PROJECT_STATUS.md).
+Backend: 875 tests (JUnit 5, Testcontainers PostgreSQL 18.6, real HTTP for integration tests). Frontend: 125 tests (Vitest, Testing Library, MSW). Results of the latest run are recorded in [PROJECT_STATUS.md](PROJECT_STATUS.md).
 
 ### Backend
 
 | Suite | Tests | What it proves |
 |---|---|---|
-| `AddressClassifierTest` | 54 | Every blocked range with its trust rule (loopback/private/CGNAT trustable; link-local, metadata, documentation, multicast, reserved, Teredo, discard never); IPv4 inside IPv6 (mapped, compatible, NAT64 incl. local-use, 6to4) classified as IPv4; neighbouring public addresses allowed |
+| `AddressClassifierTest` | 58 | Every blocked range with its trust rule (loopback/private/CGNAT trustable; link-local, metadata, documentation, multicast, reserved, Teredo, discard never); IPv4 inside IPv6 (mapped, compatible, translated, NAT64 incl. local-use, 6to4) classified as IPv4; neighbouring public addresses allowed |
 | `UrlGuardTest` | 49 | Plain URLs accepted and normalized (case, trailing dot, punycode, IPv6 literal); other protocols refused (`file`, `ftp`, `gopher`, `ws`, `jar`, `dict`, `mailto`); credentials in URLs; 13 alternative IPv4 notations (`0x7f.0.0.1`, `017700000001`, `2130706433`, `127.1`, …); backslashes, spaces, NUL, percent-encoded hosts, zone ids, underscores, bad labels, Unicode dots and non-ASCII hosts, port 0 and > 65535, relative and over-long URLs |
-| `DestinationPolicyTest` | 44 | One lookup per check; one blocked DNS answer blocks the name; names resolving to blocked addresses; blocked literals without DNS; local and internal names before DNS; privileged ports; DNS failures; trusted targets matched on exact host and port only; trust never unlocks link-local or metadata; trusted list ignored when disabled; **rebinding**: the client resolver returns only the validated answer without a new lookup and refuses other names; connected peer must be allowed; save-time checks without DNS; unsafe trusted-target configurations stop startup |
+| `DestinationPolicyTest` | 47 | One lookup per check; one blocked DNS answer blocks the name; names resolving to blocked addresses; blocked literals without DNS; local and internal names before DNS; privileged ports; DNS failures; trusted targets matched on exact host and port only; trust never unlocks link-local or metadata; trusted list ignored when disabled; **rebinding**: the client resolver returns only the validated answer without a new lookup and refuses other names; connected peer must be allowed; save-time checks without DNS; unsafe trusted-target configurations stop startup |
 | `OutboundHttpClientTest` | 21 | The real client against local servers: success (status, headers, body, size, duration); GET/POST/PUT/PATCH/DELETE with bodies; 404/500 as responses; truncation at the response limit; oversized request bodies refused; read timeout; total deadline; malformed HTTP; TLS failure; DNS failure; refused connection (no address in the message); cancellation aborts the request in flight; system proxy settings ignored; untrusted local services never contacted (9 URL forms); redirects off by default, same-origin redirects keep and cross-origin redirects drop credentials; redirects to metadata, untrusted ports, localhost, `file:` and `[::1]` refused before connecting; redirect chains limited; 303 turns POST into GET; invalid Location refused |
 | `SecretCipherTest` | 4 | AES-GCM round trip with a fresh IV; ciphertext bound to context, key id, key and content (tampering detected); invalid keys stop startup; the public development key is refused with the prod profile |
 | `RequestFactoryTest` | 7 | Path values percent-encoded so they cannot add segments, queries or fragments; query encoding and arrays; variables in headers, query and JSON bodies; header precedence (defaults < test < auth < correlation id); unresolved variables and header injection through variables refused; bearer, basic, API-key header and query authentication with credentials redacted in snapshots (raw, URL-encoded, Base64); NONE and INVALID modes never send the real credential; snapshot body redaction and truncation |

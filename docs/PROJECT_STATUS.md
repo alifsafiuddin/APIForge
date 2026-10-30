@@ -4,6 +4,23 @@
 **Release status**: feature-complete release candidate. Every mandatory local check passed on a clean clone (below); the remaining step is the first GitHub Actions run after pushing.
 **Runnable today**: the complete stack with one command (`docker compose --profile demo up -d --build`) and the documented demo ([DEMO.md](DEMO.md)); development from source; optional local AI (native Ollama or the `ai` profile).
 
+## Review after release (2026-10-29)
+
+An audit of the code against its documentation and a focused security review of the outbound path, authorization,
+secrets handling and the build gates. The end-to-end workflow already worked (Phase 12), so no feature was rebuilt.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| IPv4-translated IPv6 addresses (`::ffff:0:a.b.c.d`, SIIT) were classified as public, so `http://[::ffff:0:7f00:1]/` or a DNS answer `::ffff:0:a9fe:a9fe` passed the outbound policy. Exploitable only where the network translates that prefix | Low (defense in depth) | Fixed test-first: 4 classifier and 3 policy cases failed before the change and pass after it; `3fff::/20` (RFC 9637 documentation) added |
+| The JaCoCo coverage gates described in TESTING.md and the README were reported but not enforced (no `check` goal) | Medium (documented but missing) | `jacoco:check` added to `verify` with the documented thresholds; shown to fail at a higher threshold and pass at the documented one |
+| An open public instance lets anyone who registers send requests to public hosts | Medium (deployment guidance) | Documented as residual risk R1 with the mitigation (registration off), also in README and DEPLOYMENT.md |
+| Block messages name the category of a resolved address | Low | Accepted and documented (R2) |
+| Threat model cited five test classes that do not exist (planning names); the dependency matrix listed WireMock and Recharts, which are not dependencies | Documentation | Mapped to the real tests; matrix corrected |
+
+Also added: `CLAUDE.md` (rules for AI coding agents, from the verified conventions), a README table of what the model decides and what it never decides, and a section on how the project was built.
+
+Verification (executed 2026-10-29, Windows 11, Docker Desktop 29.9.1): `./mvnw -B clean verify` before the changes — 868 tests, BUILD SUCCESS, 94.0% / 80.1%; after — **875 tests, 0 failures, "All coverage checks have been met", BUILD SUCCESS**, 94.0% line / 80.1% branch; outbound security tests 175/175. Frontend `npm run check` 125/125, `npm run build` OK, `npm audit --omit=dev` 0 vulnerabilities. OSV-Scanner 2.6.0 on a fresh SBOM (132 components) and both lockfiles: no issues. gitleaks on the changed files: no leaks. Not re-run (no workflow or UI change): end-to-end suite, demo, stack checks (last passed 2026-10-23). GitHub Actions results could not be read from here (private repository, no `gh`).
+
 ## Phase 12 summary — release
 
 ### Delivered
@@ -236,7 +253,7 @@ The full report — commands, outcomes, defects, security checks, limitations an
 | Test history and coverage persist | ✅ Runs, results and assertions persist (Phases 5–6); coverage is computed from them, with snapshots across versions (Phase 7) |
 | AI suggestions and explanations work through a local model | ✅ Phase 8 (`qwen2.5:7b`, evaluated with `llama3.2:3b` too) |
 | AI outages do not break deterministic testing | ✅ Phase 8 (verified with Ollama stopped) |
-| Auth, authorization and outbound safeguards tested | ✅ incl. 168 outbound security tests and execution ITs |
+| Auth, authorization and outbound safeguards tested | ✅ incl. 175 outbound security tests and execution ITs |
 | Every major workflow works in the UI with persisted data | ✅ Phase 9 (73/73 walkthrough checks, axe 0 violations, no mobile overflow) |
 | Automated tests and CI pass | ◐ All local suites pass on a clean clone (868 backend, 125 frontend, 12 e2e journeys, 36 stack checks); GitHub CI not run from here |
 | Docker-based local setup works | ✅ Phase 11 (complete stack from a clean environment, persistence, health checks, HTTPS) |

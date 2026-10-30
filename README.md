@@ -10,7 +10,7 @@ Import an OpenAPI 3.0/3.1 document, generate deterministic tests from its schema
 
 ## Contents
 
-[Features](#features) · [Screenshots](#screenshots) · [Architecture](#architecture) · [Data model](#data-model) · [Quick start](#quick-start-docker) · [Demo](#demo-workflow) · [Development setup](#development-setup) · [Configuration](#configuration) · [Using APIForge](#using-apiforge) · [AI with Ollama](#ai-with-ollama) · [API](#api) · [Testing](#testing) · [Security](#security) · [Limitations](#known-limitations) · [Troubleshooting](#troubleshooting) · [Documentation](#documentation) · [License](#license)
+[Features](#features) · [Screenshots](#screenshots) · [Architecture](#architecture) · [Data model](#data-model) · [Quick start](#quick-start-docker) · [Demo](#demo-workflow) · [Development setup](#development-setup) · [Configuration](#configuration) · [Using APIForge](#using-apiforge) · [AI with Ollama](#ai-with-ollama) · [API](#api) · [Testing](#testing) · [Security](#security) · [Limitations](#known-limitations) · [Troubleshooting](#troubleshooting) · [Documentation](#documentation) · [How it was built](#how-this-project-was-built) · [License](#license)
 
 ## Features
 
@@ -216,6 +216,16 @@ AI is optional. To use it:
 2. Point APIForge at it: from source, `OLLAMA_BASE_URL=http://localhost:11434` (the default); with Docker, `APIFORGE_STACK_OLLAMA_URL=http://host.docker.internal:11434` — or run Ollama in the stack with `docker compose --profile ai up -d` (pulls the model into a persistent volume; the image is about 3.4 GB). Without a usable GPU, raise the timeouts as described in [DEPLOYMENT.md §9](docs/DEPLOYMENT.md#9-ollama-local-versus-remote): on CPU only, one test-suggestion request with `llama3.2:3b` took 167–209 s here.
 3. The header chip shows the model and whether it is ready. Use **Suggest tests** on an endpoint in the Tests tab, and **Explain with AI** on a failed result.
 
+**What the model does — and what it never does.** Correctness is decided by deterministic code; the model is used only where language understanding helps:
+
+| Task | Decided by |
+|---|---|
+| Test generation from schemas and constraints, expected statuses | Deterministic generator |
+| Pass/fail verdicts: status, media type, JSON syntax, response schema, JSON paths | Deterministic validator (the model cannot change an outcome) |
+| Coverage metrics | Deterministic calculation from stored tests and results |
+| Proposing additional test scenarios | Model — validated against a strict schema, deduplicated, stored as *needs review*, not runnable until a person accepts it |
+| Explaining a failed assertion | Model — facts it cites are checked against the recorded data; hypotheses are labelled; proposed changes are never applied |
+
 Never expose Ollama's port to the internet: it has no authentication. What the model sees, how answers are validated, and hardware guidance: [docs/AI.md](docs/AI.md); measured quality and latency of both models: [docs/AI_EVALUATION.md](docs/AI_EVALUATION.md).
 
 ## API
@@ -241,12 +251,12 @@ More real requests and responses (registration with CSRF, import, generation, ru
 
 ## Testing
 
-| Suite | Size | Result (clean checkout, 2026-10-23) |
+| Suite | Size | Latest result |
 |---|---|---|
-| Backend — JUnit 5, Testcontainers PostgreSQL 18, real HTTP, ArchUnit | 868 tests | all pass; 94.0% line and 80.1% branch coverage |
-| Frontend — Vitest, Testing Library, MSW | 125 tests | all pass |
-| End-to-end — Playwright against the running stack | 12 journeys | all pass (AI journeys in their matching mode: with and without Ollama) |
-| Stack — images, startup order, migrations, exposure, persistence | 36 checks | all pass |
+| Backend — JUnit 5, Testcontainers PostgreSQL 18, real HTTP, ArchUnit | 875 tests | all pass (2026-10-29); 94.0% line and 80.1% branch coverage, enforced gates: ≥ 80% overall, ≥ 90% for `outbound`, `validation`, `secrets`, `generation` |
+| Frontend — Vitest, Testing Library, MSW | 125 tests | all pass (2026-10-29) |
+| End-to-end — Playwright against the running stack | 12 journeys | all pass on a clean clone (2026-10-23; AI journeys in their matching mode: with and without Ollama) |
+| Stack — images, startup order, migrations, exposure, persistence | 36 checks | all pass on a clean clone (2026-10-23) |
 
 How the tests are organized, what each suite proves, and the quality gates: [docs/TESTING.md](docs/TESTING.md). The latest full quality-assurance pass (commands, outcomes, defects found and fixed): [docs/QA_REPORT.md](docs/QA_REPORT.md).
 
@@ -258,6 +268,7 @@ How the tests are organized, what each suite proves, and the quality gates: [doc
 - **Secrets**: encrypted at rest (AES-256-GCM), write-only through the API, redacted from results, logs and AI prompts — verified by tests that capture the logs.
 - **Untrusted input**: OpenAPI documents parsed with limits and no network access; strict request validation; no stack traces in responses.
 - **AI**: the model only reads redacted data, its output is validated against strict schemas, suggestions need review before they can run, and nothing is applied automatically.
+- **Public instances**: anyone who can register can send requests to public hosts through the app, so turn off self-registration (`APIFORGE_AUTH_REGISTRATION_ENABLED=false`) once the accounts you need exist. Residual risks: [SECURITY.md §11.1](docs/SECURITY.md#111-residual-risks).
 - **Deployment**: non-root, read-only containers without secrets; database and model server never published; strict Content-Security-Policy; dependency (OSV-Scanner) and secret (gitleaks) scanning in CI.
 
 Threat model and every control with its test: [docs/SECURITY.md](docs/SECURITY.md).
@@ -305,6 +316,10 @@ Threat model and every control with its test: [docs/SECURITY.md](docs/SECURITY.m
 | [DECISIONS.md](docs/DECISIONS.md) | Architecture decision records and dependency matrix |
 | [PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | Release status, verification results, limitations |
 | [PORTFOLIO.md](docs/PORTFOLIO.md) | Project summary and verified highlights |
+
+## How this project was built
+
+APIForge AI was developed with an AI coding agent (Claude Code), phase by phase: each phase had a written scope and a completion check, and ended with the checks actually executed and recorded in [PROJECT_STATUS.md](docs/PROJECT_STATUS.md) (commits carry a `Co-Authored-By` trailer). The agent's working rules for this repository are in [CLAUDE.md](CLAUDE.md). Verification is what made the output trustworthy: it found defects in generated code that compiled and passed unit tests — for example spoofable client addresses behind the proxy, nginx caching a stale backend address, a proxy timeout shorter than AI calls, and an IPv6 address form that slipped past the SSRF classifier — each fixed and covered by a test or check (PROJECT_STATUS.md, QA_REPORT.md).
 
 ## License
 

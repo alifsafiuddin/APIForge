@@ -87,7 +87,7 @@ Base images are pinned to exact versions and updated through Dependabot pull req
 | `APIFORGE_FORWARD_HEADERS_STRATEGY` | `native` (prod) | `native` | Honour `X-Forwarded-*` from private-network proxies (client IP for rate limits and audit, HTTPS scheme) |
 | `APIFORGE_PROXY_TRUSTED` | `false` | `true` behind Caddy or a load balancer only (§2.2) | Whether nginx passes on client-supplied forwarding headers |
 | `APIFORGE_PROXY_READ_TIMEOUT` | `300s` | more than 2 × `APIFORGE_AI_REQUEST_TIMEOUT` (§2.2) | How long nginx waits for the backend |
-| `APIFORGE_AUTH_REGISTRATION_ENABLED` | `true` | `false` for a private installation once accounts exist | Self-registration |
+| `APIFORGE_AUTH_REGISTRATION_ENABLED` | `true` | `false` on any publicly reachable instance once the needed accounts exist: with open registration, anyone can use the instance to send requests to public hosts (SECURITY.md §11.1, R1) | Self-registration |
 | `APIFORGE_CORS_ALLOWED_ORIGINS` | empty | empty (same origin) | Only when an approved UI runs on another origin |
 | `APIFORGE_SESSION_IDLE_TIMEOUT` / `_ABSOLUTE_TIMEOUT` | `30m` / `12h` | as required | Session lifetimes |
 | `APIFORGE_SPEC_MAX_SIZE` | `5MB` | — | OpenAPI document limit |

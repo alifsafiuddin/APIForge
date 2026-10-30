@@ -49,6 +49,7 @@ class AddressClassifierTest {
             2001:db8::1          | false | documentation address
             2001::1              | false | Teredo tunnel address
             100::1               | false | discard-only address
+            3fff::1              | false | documentation address
             """)
     void blockedRanges(String address, boolean trustable, String reason) throws UnknownHostException {
         AddressClassifier.Classification classification = classify(address);
@@ -70,6 +71,9 @@ class AddressClassifierTest {
             64:ff9b:1::a00:1         | private network address
             2002:a9fe:a9fe::1        | link-local or cloud metadata address
             2002:7f00:1::            | loopback address
+            ::ffff:0:169.254.169.254 | link-local or cloud metadata address
+            ::ffff:0:7f00:1          | loopback address
+            ::ffff:0:a00:5           | private network address
             """)
     void ipv4EmbeddedInIpv6IsClassifiedAsIpv4(String address, String reason) throws UnknownHostException {
         assertThat(classify(address).blocked()).isTrue();
