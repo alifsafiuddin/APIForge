@@ -1,0 +1,125 @@
+openapi: 3.0.3
+info:
+  title: Coverage Lab API
+  version: 1.0.0
+  description: >-
+    A small subset of the Warehouse Lab contract with known endpoints and scenarios, for checking
+    the coverage dashboard by hand (samples/README.md lists the expected numbers). Served by
+    samples/warehouse-lab-server.mjs, except GET /reports, which that server does not implement.
+servers:
+  - url: http://127.0.0.1:8090
+security:
+  - apiKeyAuth: []
+paths:
+  /health:
+    get:
+      tags: [system]
+      summary: Liveness (public)
+      security: []
+      responses:
+        '200':
+          description: Up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: {type: string, enum: [UP]}
+  /products/{productId}:
+    parameters:
+      - name: productId
+        in: path
+        required: true
+        schema: {type: integer, minimum: 1, example: 42}
+    get:
+      tags: [products]
+      summary: One product
+      responses:
+        '200':
+          description: The product
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Product'}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [products]
+      summary: Change the stock of a product
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+              minProperties: 1
+              additionalProperties: false
+              properties:
+                stock: {type: integer, minimum: 0, maximum: 10000, example: 25}
+      responses:
+        '200':
+          description: The updated product
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Product'}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          description: Unsupported media type
+    delete:
+      tags: [products]
+      summary: Delete a product
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /reports:
+    get:
+      tags: [reports]
+      summary: Sales report (not implemented by the sample server)
+      responses:
+        '200':
+          description: The report
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    apiKeyAuth: {type: apiKey, in: header, name: X-API-Key}
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    NotFound:
+      description: No such product
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    Product:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: integer}
+        name: {type: string}
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string}
+        message: {type: string}

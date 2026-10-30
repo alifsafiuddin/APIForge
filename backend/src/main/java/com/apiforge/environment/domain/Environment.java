@@ -1,5 +1,7 @@
 package com.apiforge.environment.domain;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -57,6 +59,10 @@ public class Environment extends AuditableEntity {
     @Column(name = "auth_config", nullable = false)
     private Map<String, Object> authConfig = Map.of();
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "default_headers", nullable = false)
+    private Map<String, String> defaultHeaders = Map.of();
+
     protected Environment() {
     }
 
@@ -64,6 +70,24 @@ public class Environment extends AuditableEntity {
         this.projectId = projectId;
         this.name = name;
         this.baseUrl = baseUrl;
+    }
+
+    /** Replaces every setting; values were validated by the service. */
+    public void configure(String newName, String newBaseUrl, int newTimeoutMs, boolean newFollowRedirects,
+            ExecutionPolicy newPolicy, AuthType newAuthType, Map<String, Object> newAuthConfig,
+            Map<String, String> newDefaultHeaders) {
+        this.name = newName;
+        this.baseUrl = newBaseUrl;
+        this.timeoutMs = newTimeoutMs;
+        this.followRedirects = newFollowRedirects;
+        this.executionPolicy = newPolicy;
+        this.authType = newAuthType;
+        this.authConfig = new LinkedHashMap<>(newAuthConfig);
+        this.defaultHeaders = new LinkedHashMap<>(newDefaultHeaders);
+    }
+
+    public Map<String, String> getDefaultHeaders() {
+        return Collections.unmodifiableMap(defaultHeaders);
     }
 
     public UUID getProjectId() {
@@ -95,6 +119,6 @@ public class Environment extends AuditableEntity {
     }
 
     public Map<String, Object> getAuthConfig() {
-        return authConfig;
+        return Collections.unmodifiableMap(authConfig);
     }
 }

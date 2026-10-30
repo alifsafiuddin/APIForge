@@ -74,6 +74,8 @@ export function OperationList({ operations, versionQuery }: { operations: Operat
         <p className="py-6 text-center text-sm text-muted-foreground">No endpoints match your filters.</p>
       ) : (
         <nav aria-label="Endpoints" className="space-y-4">
+          {/* Keeps the heading outline intact: tag headings (h3) belong to this section. */}
+          <h2 className="sr-only">Endpoints</h2>
           {[...groups.entries()].map(([tag, items]) => (
             <section key={tag} aria-label={`Tag ${tag}`}>
               <h3 className="px-2 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">{tag}</h3>

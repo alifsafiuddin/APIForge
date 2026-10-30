@@ -1,14 +1,23 @@
-import { Navigate, type RouteObject } from 'react-router'
+import type { RouteObject } from 'react-router'
 
 import { PublicOnly, RequireAuth } from '@/features/auth/guards'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { RegisterPage } from '@/features/auth/RegisterPage'
 import { OverviewPage } from '@/features/overview/OverviewPage'
 import { ProjectLayout } from '@/features/projects/ProjectLayout'
+import { ProjectOverviewPage } from '@/features/projects/ProjectOverviewPage'
 import { ProjectsPage } from '@/features/projects/ProjectsPage'
 import { OperationDetailView } from '@/features/specs/OperationDetailView'
 import { SpecificationPage } from '@/features/specs/SpecificationPage'
 import { SpecOverview } from '@/features/specs/SpecOverview'
+import { TestsPage } from '@/features/tests/TestsPage'
+import { EnvironmentsPage } from '@/features/environments/EnvironmentsPage'
+import { CoveragePage } from '@/features/coverage/CoveragePage'
+import { ConsolePage } from '@/features/runs/ConsolePage'
+import { RunComparisonPage } from '@/features/runs/RunComparisonPage'
+import { RunDetailPage } from '@/features/runs/RunDetailPage'
+import { RunsPage } from '@/features/runs/RunsPage'
+import { SettingsPage } from '@/features/settings/SettingsPage'
 
 import { AppShell } from './layout/AppShell'
 import { NotFoundPage, RouteErrorPage } from './RouteErrorPage'
@@ -40,11 +49,12 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <OverviewPage /> },
           { path: 'projects', element: <ProjectsPage /> },
+          { path: 'settings', element: <SettingsPage /> },
           {
             path: 'projects/:projectId',
             element: <ProjectLayout />,
             children: [
-              { index: true, element: <Navigate to="spec" replace /> },
+              { index: true, element: <ProjectOverviewPage /> },
               {
                 path: 'spec',
                 element: <SpecificationPage />,
@@ -53,6 +63,13 @@ export const routes: RouteObject[] = [
                   { path: 'operations/:operationId', element: <OperationDetailView /> },
                 ],
               },
+              { path: 'tests', element: <TestsPage /> },
+              { path: 'environments', element: <EnvironmentsPage /> },
+              { path: 'runs', element: <RunsPage /> },
+              { path: 'runs/:runId', element: <RunDetailPage /> },
+              { path: 'runs/:runId/compare', element: <RunComparisonPage /> },
+              { path: 'console', element: <ConsolePage /> },
+              { path: 'coverage', element: <CoveragePage /> },
             ],
           },
           { path: '*', element: <NotFoundPage /> },

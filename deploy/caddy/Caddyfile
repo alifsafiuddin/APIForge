@@ -1,0 +1,12 @@
+# TLS terminator for single-server deployments (docker compose --profile tls).
+# Caddy obtains and renews certificates automatically for APIFORGE_DOMAIN (DNS must point to this
+# server; ports 80 and 443 reachable). "localhost" uses Caddy's local CA, for testing only.
+{$APIFORGE_DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+	# nginx in the frontend container serves the app and forwards /api to the backend.
+	reverse_proxy frontend:8080
+}

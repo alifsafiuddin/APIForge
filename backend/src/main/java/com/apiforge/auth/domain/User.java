@@ -35,6 +35,10 @@ public class User extends AuditableEntity {
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 
+    /** When the password last changed; sessions signed in earlier are ended. */
+    @Column(name = "credentials_changed_at")
+    private Instant credentialsChangedAt;
+
     protected User() {
     }
 
@@ -60,6 +64,15 @@ public class User extends AuditableEntity {
             return true;
         }
         return false;
+    }
+
+    public void rename(String newDisplayName) {
+        this.displayName = newDisplayName;
+    }
+
+    public void changePassword(String newPasswordHash, Instant now) {
+        this.passwordHash = newPasswordHash;
+        this.credentialsChangedAt = now;
     }
 
     public void recordSuccessfulLogin(Instant now) {
@@ -94,5 +107,9 @@ public class User extends AuditableEntity {
 
     public Instant getLastLoginAt() {
         return lastLoginAt;
+    }
+
+    public Instant getCredentialsChangedAt() {
+        return credentialsChangedAt;
     }
 }

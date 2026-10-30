@@ -1,6 +1,6 @@
 package com.apiforge.audit.domain;
 
-/** Security-relevant events. Keep in sync with ck_audit_events_type (latest: V7 migration). */
+/** Security-relevant events. Keep in sync with ck_audit_events_type (latest: V9 migration). */
 public enum AuditEventType {
     USER_REGISTERED,
     LOGIN_SUCCEEDED,
@@ -11,5 +11,16 @@ public enum AuditEventType {
     PROJECT_DELETED,
     CROSS_USER_ACCESS_DENIED,
     SPECIFICATION_IMPORTED,
-    SPECIFICATION_ACTIVATED
+    SPECIFICATION_ACTIVATED,
+    TESTS_GENERATED,
+    ENVIRONMENT_CHANGED,
+    SECRET_CHANGED,
+    RUN_STARTED,
+    RUN_CANCELLED,
+    OUTBOUND_BLOCKED,
+    AI_SUGGESTIONS_REQUESTED,
+    AI_EXPLANATION_REQUESTED,
+    PROFILE_UPDATED,
+    PASSWORD_CHANGED,
+    ACCOUNT_DELETED
 }

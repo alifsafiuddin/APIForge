@@ -1,0 +1,75 @@
+{
+  "description": "Known failures of samples/warehouse-lab-server.mjs started with WAREHOUSE_LAB_VIOLATIONS=1, with the cause we know (from the server's source) and the facts a useful explanation must mention. Each entry of mustMention is a group of alternatives; a group counts when any alternative appears in the explanation.",
+  "spec": "samples/warehouse-lab-openapi.yaml",
+  "explanations": [
+    {
+      "id": "health-status-enum",
+      "find": { "operationKey": "GET /health", "testName": "Valid request" },
+      "knownCause": "The server reports status DEGRADED, which is not in the documented enum [UP].",
+      "mustMention": [["$.status", "status field"], ["DEGRADED"], ["enum", "UP", "allowed"]]
+    },
+    {
+      "id": "products-legacy-item",
+      "find": { "operationKey": "GET /products", "testName": "Valid request (required fields only)" },
+      "knownCause": "The first listed item is a legacy record: price is a string, createdAt is not a date-time, dimensions.widthCm is -1.",
+      "mustMention": [["price"], ["string"], ["createdAt", "date-time"], ["widthCm", "minimum"]]
+    },
+    {
+      "id": "product-missing-sku",
+      "find": { "operationKey": "GET /products/{productId}", "testName": "Valid request" },
+      "knownCause": "The response omits the required property sku.",
+      "mustMention": [["sku"], ["required", "missing"]]
+    },
+    {
+      "id": "patch-content-type",
+      "find": { "operationKey": "PATCH /products/{productId}", "testName": "Valid request (required fields only)" },
+      "knownCause": "A patch of exactly one property is answered with Content-Type text/plain instead of application/json.",
+      "mustMention": [["text/plain"], ["application/json", "content type", "content-type"]]
+    },
+    {
+      "id": "delete-returns-200",
+      "find": { "operationKey": "DELETE /products/{productId}", "testName": "Valid request" },
+      "knownCause": "Deleting product 42 answers 200 with a body; only 204 is documented.",
+      "mustMention": [["200"], ["204"], ["documented", "undocumented", "not documented"]]
+    },
+    {
+      "id": "order-status-lost",
+      "find": { "operationKey": "POST /orders", "testName": "Valid request (required fields only)" },
+      "knownCause": "An order without couponCode gets status \"lost\", which is not in the enum [accepted, packed, shipped].",
+      "mustMention": [["lost"], ["$.status", "status"], ["enum", "accepted", "allowed"]]
+    },
+    {
+      "id": "order-quantity-maximum",
+      "find": { "operationKey": "POST /orders", "testName": "Field 'lines[0].quantity' above maximum 999" },
+      "knownCause": "The server accepts quantities above 999 (the contract says maximum 999): 201 instead of 400, and the echoed quantity breaks the response schema.",
+      "mustMention": [["999", "maximum"], ["201"], ["400"], ["quantity"]]
+    },
+    {
+      "id": "console-timeout",
+      "console": { "environment": "slow", "method": "GET", "path": "/lab/slow", "query": { "ms": 3000 } },
+      "knownCause": "The endpoint answers after 3 s; the environment's read timeout is 1 s.",
+      "mustMention": [["timeout", "timed out"], ["1000", "1 s", "1s", "read timeout"]]
+    },
+    {
+      "id": "console-malformed-json",
+      "console": { "environment": "default", "method": "GET", "path": "/lab/malformed", "query": {} },
+      "knownCause": "The response declares JSON but the body is truncated ({\"items\": [1, 2,).",
+      "mustMention": [["JSON"], ["malformed", "invalid", "not valid", "syntax", "truncated", "incomplete"]]
+    },
+    {
+      "id": "console-status-503",
+      "console": { "environment": "default", "method": "GET", "path": "/lab/status/503", "query": {} },
+      "knownCause": "The diagnostic endpoint answers 503 on request; the console expects 2XX.",
+      "mustMention": [["503"], ["2XX", "success", "expected"]]
+    }
+  ],
+  "suggestions": [
+    { "operationKey": "GET /health" },
+    { "operationKey": "GET /products" },
+    { "operationKey": "POST /products" },
+    { "operationKey": "GET /products/{productId}" },
+    { "operationKey": "PATCH /products/{productId}" },
+    { "operationKey": "DELETE /products/{productId}" },
+    { "operationKey": "POST /orders" }
+  ]
+}

@@ -67,10 +67,11 @@ Paths below are relative to `/api/v1`.
 | POST | `/auth/login` | *public*. `{email, password}` → 200 user. New session id and new CSRF token on success. Every failure is 401 `BAD_CREDENTIALS` with the same message (unknown e-mail, wrong password, locked account) |
 | POST | `/auth/logout` | 204. Invalidates the server session, clears the session cookie and rotates the CSRF token. Requires the CSRF header |
 | GET | `/auth/me` | Current user `{id, email, displayName}`; 401 `UNAUTHENTICATED` without a session |
+| PATCH | `/auth/me` | `{displayName}` (1–100 characters, trimmed, no control characters) → 200 user; the session is renewed with the new name. Audited (`PROFILE_UPDATED`) — Phase 9 |
+| POST | `/auth/password` | `{currentPassword, newPassword}` → 204. Wrong current password → 400 with `errors[].field = currentPassword`; policy violations or an unchanged password → 400 on `newPassword`. This session continues with a new id; **every other session of the account ends** (`users.credentials_changed_at`). Audited (`PASSWORD_CHANGED`) — Phase 9 |
+| DELETE | `/auth/me` | `{password, confirmEmail}` → 204. Deletes the account and, by cascade, every project it owns; all its sessions end. Wrong password → 400 on `password`; e-mail not the account's (case-insensitive) → 400 on `confirmEmail`. Audited (`ACCOUNT_DELETED`, subject = the user id, kept after deletion) — Phase 9 |
 
-Rules (details in [SECURITY.md](SECURITY.md) §3): passwords 12–64 characters and ≤ 72 bytes, not in the common-password list, not containing the e-mail address; e-mail normalized to lower case; 5 consecutive failures lock sign-in for 15 minutes; per-IP limits of 10 sign-ins and 5 registrations per minute (429 `RATE_LIMITED` + `Retry-After`); sessions expire after 30 minutes idle and 12 hours absolute.
-
-Planned (not implemented): `PATCH /users/me` (display name) and `POST /users/me/password`.
+Rules (details in [SECURITY.md](SECURITY.md) §3): passwords 12–64 characters and ≤ 72 bytes, not in the common-password list, not containing the e-mail address; e-mail normalized to lower case; 5 consecutive failures lock sign-in for 15 minutes; per-IP limits of 10 sign-ins and 5 registrations per minute (429 `RATE_LIMITED` + `Retry-After`); sessions expire after 30 minutes idle and 12 hours absolute. Password checks of the account endpoints are limited to 5 per user per minute (429 `RATE_LIMITED` with `retryAfterSeconds`), so a hijacked session cannot be used to guess the password.
 
 ### 2.2 Projects — Phase 2 ✅ implemented
 
@@ -105,90 +106,122 @@ Base: `/projects/{projectId}/specs`. Every call requires owning the project (oth
 
 **Normalized operation content**: parameters are the effective set (path-level merged with operation-level, the operation wins on name + location) with `$ref`s to `components.parameters` resolved; request bodies, responses and response headers likewise; responses are ordered numerically with `default` last; `security` is the effective requirement list (an empty list means "no authentication"). Schema `$ref`s are kept and resolved against `/schemas`, which keeps recursive schemas finite.
 
-### 2.4 Environments — Phase 3
+### 2.4 Environments ✅ Phase 5
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/projects/{projectId}/environments` | List |
-| POST | `/projects/{projectId}/environments` | `{name, baseUrl, timeoutMs, followRedirects, executionPolicy, auth}` — `baseUrl` is syntax-checked and run through the destination policy (no DNS at save time; DNS is checked at execution) |
-| GET | `/projects/{projectId}/environments/{envId}` | Detail; variables listed as `{name, secret, value}` where `value` is `null` for secrets and `hasValue: true` is set instead |
-| PUT | `/projects/{projectId}/environments/{envId}` | Update |
-| DELETE | `/projects/{projectId}/environments/{envId}` | Delete (runs keep their snapshots) |
-| PUT | `/projects/{projectId}/environments/{envId}/variables/{name}` | `{value, secret}`. Upsert; a secret value is write-only |
-| DELETE | `/projects/{projectId}/environments/{envId}/variables/{name}` | Remove variable |
-| POST | `/projects/{projectId}/environments/{envId}/connectivity-check` | Guarded `GET` of the base URL; reports reachability and timing, never the body |
+| GET | `/projects/{projectId}/environments` | List with variables (secret values never included) |
+| POST | `/projects/{projectId}/environments` | `{name, baseUrl, timeoutMs, followRedirects, executionPolicy, authorizationConfirmed, auth, defaultHeaders}` → 201. `baseUrl` is parsed strictly (http/https, no credentials, no query, canonical IPs only) and checked against the destination policy without DNS (blocked names, literal addresses, ports); DNS is checked again at every execution. `executionPolicy` other than `READ_ONLY` requires `authorizationConfirmed: true`. `auth = {type: NONE \| BEARER \| BASIC \| API_KEY_HEADER \| API_KEY_QUERY, tokenVariable?, usernameVariable?, passwordVariable?, headerName?, parameterName?, valueVariable?}` names variables, never values. `defaultHeaders` follow the test header rules (no transport, Content-Type or credential headers; `{{VAR}}` allowed) |
+| GET | `/projects/{projectId}/environments/{envId}` | Detail; variables as `{name, secret, value, hasValue}` with `value: null` for secrets |
+| PUT | `/projects/{projectId}/environments/{envId}` | Same body plus `version` (optimistic locking, 409 `STALE_VERSION`); names unique per project (409 `DUPLICATE_NAME`) |
+| DELETE | `/projects/{projectId}/environments/{envId}` | 204; runs keep their environment name and base URL snapshots |
+| PUT | `/projects/{projectId}/environments/{envId}/variables/{name}` | `{value, secret}` upsert; secrets are encrypted (AES-256-GCM, bound to environment and name) and write-only; values ≤ 4096 characters without line breaks; audited as `SECRET_CHANGED` (name only) |
+| DELETE | `/projects/{projectId}/environments/{envId}/variables/{name}` | 204 |
 
 ### 2.5a Execution history (read-only) — Phase 2 ✅ implemented
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/projects/{projectId}/runs` | Paged runs, newest first (`?sort=createdAt\|startedAt\|finishedAt\|status`). Each run: status, environment name/base URL snapshots, outcome counts, timestamps |
+| GET | `/projects/{projectId}/runs` | Paged runs, newest first (`?sort=createdAt\|startedAt\|finishedAt\|status`). Each run: status, environment name/base URL snapshots, outcome counts, timestamps. Filters (Phase 9): `?kind=TEST_RUN\|AD_HOC`, `?status=QUEUED\|RUNNING\|COMPLETED\|CANCELLED\|INTERRUPTED`, `?failing=true` (runs with a failed or errored test) or `false` (completed runs without any); unknown values → 400 |
 | GET | `/projects/{projectId}/runs/{runId}` | One run |
-| GET | `/projects/{projectId}/runs/{runId}/results` | Paged result summaries (`?sort=executedAt\|outcome\|durationMs`, default `executedAt,asc`) |
-| GET | `/projects/{projectId}/runs/{runId}/results/{resultId}` | Full result: request snapshot, response, checks, error kind and message |
+| GET | `/projects/{projectId}/runs/{runId}/results` | Paged result summaries (`?outcome=PASSED\|FAILED\|ERROR\|SKIPPED\|INCONCLUSIVE`, `?sort=executedAt\|outcome\|durationMs`, default `executedAt,asc`). Each summary includes `failedChecks`, `skippedChecks` and `firstFailure` (Phase 6) |
+| GET | `/projects/{projectId}/runs/{runId}/results/{resultId}` | Full result: request snapshot, response, checks (assertions, §2.6), error kind and message, `durationMs` and `timeToHeadersMs` |
+| GET | `/projects/{projectId}/runs/{runId}/comparison?baseline=` | Outcome changes against `baseline`, or by default against the previous run of the same kind (404 when there is none): `{baseline, current, counts: {FIXED, REGRESSED, CHANGED, UNCHANGED, NEW, REMOVED}, changes: [{testName, operationKey, testCaseId, baselineOutcome, currentOutcome, kind, baselineResultId, currentResultId}]}` (Phase 6) |
 
-Runs and results are always resolved through the project and run in the path, so an id from another project returns 404. Runs are created by the execution engine (Phase 4/5); until then the history is empty.
+Runs and results are always resolved through the project and run in the path, so an id from another project returns 404. Runs are created by the execution engine (§2.5).
 
-### 2.5 Execution — Phase 4 (ad hoc), Phase 5 (runs of test cases)
-
-| Method | Path | Description |
-|---|---|---|
-| POST | `/projects/{projectId}/executions/ad-hoc` | `{environmentId, operationKey, request: {pathParams, query, headers, body}}`. Synchronous; creates a one-item run and returns the execution |
-| POST | `/projects/{projectId}/runs` | `{environmentId, testCaseIds?: [], operationKeys?: [], includeCategories?: []}` → `202 {runId}`. Rejects unapproved or rejected tests (`TEST_NOT_APPROVED`) and tests above the environment policy |
-| GET | `/projects/{projectId}/runs` | Paged history, filterable by `status`, `environmentId`, date |
-| GET | `/projects/{projectId}/runs/{runId}` | Run summary + execution list (outcome, duration, finding counts) |
-| POST | `/projects/{projectId}/runs/{runId}/cancel` | Cancel remaining executions → 202 |
-| GET | `/projects/{projectId}/executions/{executionId}` | Full detail: redacted request snapshot, response (headers, capped body), checks, findings |
-
-### 2.6 Contract validation — Phase 4
-
-Findings are returned inside execution detail. Additional report endpoint:
+### 2.5 Execution ✅ Phase 5
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/projects/{projectId}/runs/{runId}/validation-report` | Findings aggregated by operation, rule and severity, with counts and examples |
+| POST | `/projects/{projectId}/runs` | `{environmentId, testIds?: [], operationKey?, suiteId?}` → **202** with the run (`QUEUED`) and a `Location`. Without `testIds` every runnable test (enabled, approved, active) is selected, optionally narrowed to an operation or suite; explicitly selected tests must all be runnable (else 400). At most 500 tests. Tests above the environment's execution policy are recorded as `SKIPPED` with the reason, never sent. More than 2 concurrent executions per user → 429 `RATE_LIMITED`. Audited (`RUN_STARTED`) |
+| POST | `/projects/{projectId}/runs/{runId}/cancel` | 202; aborts the request in flight (`ERROR/CANCELLED`) and records the remaining tests as `SKIPPED`; the run ends `CANCELLED`. A finished run → 409 |
+| POST | `/projects/{projectId}/executions` | `{environmentId, method, path, request: {query, headers, body, auth}, expectedStatuses?}` (path concrete, no query/fragment; `expectedStatuses` default `["2XX"]`). Synchronous; stored as a one-result `AD_HOC` run; returns the result detail. Method above the environment policy → 403 `EXECUTION_POLICY`; request budget (300/min per user) exhausted → 429 |
+| GET | `/projects/{projectId}/runs`, `/runs/{runId}`, `/runs/{runId}/results[/{resultId}]` | History (§2.5a). Runs include `kind` (`TEST_RUN`, `AD_HOC`) and `statusReason`; results include `correlationId`, the redacted request snapshot (method, URL, headers, body, auth mode, redirects followed), the redacted response (status, headers, text body up to 256 KB, size, truncation, content type), checks and the error kind |
 
-Finding shape:
+**Outcomes.** A response is evaluated with `STATUS` (against the test's expected codes or classes) plus the contract assertions of §2.6. Any `FAIL` → `FAILED`; otherwise any `INCONCLUSIVE` → `INCONCLUSIVE`; otherwise `PASSED`. `SKIPPED` assertions never count as passes. (Results recorded in Phase 5 may still contain `CONTENT_TYPE`/`RESPONSE_SCHEMA` checks with result `NOT_EVALUATED`.) A request that got no usable response is `ERROR` with `TIMEOUT`, `CONNECT_FAILED`, `DNS_FAILURE`, `TLS_ERROR`, `BLOCKED_BY_POLICY`, `REDIRECT_BLOCKED`, `INVALID_RESPONSE`, `VARIABLE_UNRESOLVED`, `CANCELLED` or `INTERNAL`.
+
+**Correlation.** Every request carries `X-APIForge-Request-Id` (a dedicated name, so it never collides with headers the API under test documents); the same id is stored with the result and appears in APIForge's outbound log line.
+
+### 2.6 Contract validation ✅ Phase 6
+
+Every response is validated against the operation of the **active** specification that matches the request (method and path template). The results are the `checks` of the result detail, in this order:
+
+| Check | Result |
+|---|---|
+| `STATUS` | `PASS`/`FAIL`: the status is one of the test's expected statuses |
+| `STATUS_DOCUMENTED` | `PASS` (exact code, class such as `4XX`, or `default`); `FAIL` with the documented statuses as `expected`; `SKIPPED` when no operation matches |
+| `CONTENT_TYPE` | `PASS`; `FAIL` when a body has no or an undocumented media type; `SKIPPED` when the response is documented without a body |
+| `JSON_SYNTAX` | Any body declaring JSON: `PASS`, `FAIL` (line and column, never body text), `INCONCLUSIVE` when truncated |
+| `BODY_SCHEMA` | `PASS`; one `FAIL` per violation; `INCONCLUSIVE` (truncated, non-JSON with a schema, unsupported keywords); `SKIPPED` with the reason (no documented body or schema, undocumented status, content-type mismatch, invalid JSON, validation turned off) |
+
+Assertion shape (fields other than `name`, `result` and `message` appear when they apply):
 
 ```json
 {
-  "rule": "SCHEMA_TYPE_MISMATCH",
-  "severity": "ERROR",
-  "jsonPath": "$.items[2].price",
+  "name": "BODY_SCHEMA",
+  "result": "FAIL",
+  "path": "$.items[0].price",
+  "keyword": "type",
   "expected": "number",
-  "actual": "string (\"12.50\")",
-  "message": "Value at $.items[2].price is a string but the schema requires number.",
-  "specPointer": "#/paths/~1orders/get/responses/200/content/application~1json/schema/properties/items/items/properties/price"
+  "actual": "string \"19.90\"",
+  "message": "$.items[0].price expected number but found string."
 }
 ```
 
-### 2.7 Test cases and generation — Phase 5
+Values in `expected`, `actual` and `message` are redacted like the rest of the result. An aggregated per-rule report endpoint was planned here but is not implemented; findings are reported per result.
+
+### 2.7 Test cases, suites and generation ✅ Phase 4
+
+The brief moved deterministic generation ahead of execution, so this section is implemented in Phase 4 (ADR-025). Tests are listed, edited and organized here; they are executed by the runs API (§2.5) once execution exists.
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/projects/{projectId}/tests/generate` | `{operationKeys?: [], categories?: []}`. Deterministic generation against the active version; idempotent through the dedupe hash → `{created, unchanged, skippedUnsafe: [{operationKey, category, reason}]}` |
-| GET | `/projects/{projectId}/tests` | `?operationKey=&origin=&reviewStatus=&lifecycleStatus=&category=` paged |
-| POST | `/projects/{projectId}/tests` | Create a manual test |
-| GET | `/projects/{projectId}/tests/{testId}` | Detail |
-| PUT | `/projects/{projectId}/tests/{testId}` | Edit (an edited AI test returns to `PENDING_REVIEW` unless the editor approves in the same request) |
-| POST | `/projects/{projectId}/tests/{testId}/review` | `{decision: "APPROVE" \| "REJECT", note?}` |
-| DELETE | `/projects/{projectId}/tests/{testId}` | Archive (soft delete) |
+| POST | `/projects/{projectId}/tests/generate` | Body `{operationKeys?: []}` (omitted or empty = every operation of the **active** version; unknown keys → 400). Idempotent through the scenario identity → `{specificationVersionId, specificationVersionNumber, operations, created, updated, unchanged, keptUserEdits, archived, total, generatorVersion, skipped: [{operationKey, scenario, reason}]}`. No active version → 409 `NO_ACTIVE_SPECIFICATION`. Audited (`TESTS_GENERATED`) |
+| GET | `/projects/{projectId}/tests/generation-plan?operationKey=` | What generation produces for one operation, without storing anything: `{scenarios: [{scenarioKey, name, category, expectedStatuses}], skipped: [...]}`. The UI uses it to explain what is *not* generated |
+| GET | `/projects/{projectId}/tests` | Paged (default 50, max 100). Filters `operationKey, suiteId, category, origin, enabled, reviewStatus, lifecycleStatus` (archived only when asked for), `q` (name contains). Sort allow-list `name, operationKey, category, sortOrder, updatedAt, createdAt`; default `operationKey, sortOrder, name` |
+| GET | `/projects/{projectId}/tests/summary` | `{total, enabled, stale, operations: [{operationKey, total, enabled, stale}]}` |
+| GET | `/projects/{projectId}/tests/{testId}` | Detail (shape below); archived tests → 404 |
+| PUT | `/projects/{projectId}/tests/{testId}` | `{name, request, expectations: {statuses, summary?, validateResponseSchema?}, rationale?, version}`. Validated (path parameters must match the path; no `Host`, `Content-Length`, `Transfer-Encoding`, `Connection`, `Content-Type`, `Authorization`, `Cookie`, `Proxy-*` headers; no CR/LF; body ≤ 256 KB; statuses `NNN` or `NXX`) → 400 `VALIDATION_ERROR` with per-field `errors`. Marks the test `userModified` (regeneration leaves it alone); an edited AI suggestion returns to `PENDING_REVIEW`. Stale `version` → 409 |
+| PATCH | `/projects/{projectId}/tests/{testId}` | `{enabled?, suiteId?, version}`: enable/disable or move |
+| POST | `/projects/{projectId}/tests/bulk` | `{testIds (1–500), enabled?, suiteId?}` → `{updated}`; any id outside the project → 404 and nothing changes |
+| POST | `/projects/{projectId}/tests/{testId}/review` | `{decision: "APPROVE" \| "REJECT"}`; rejected tests never run |
+| GET, POST | `/projects/{projectId}/test-suites` | Suites with `testCount`; create a CUSTOM suite `{name, description?}` (names unique per project, case-insensitive → 409 `DUPLICATE_NAME`) |
+| PATCH, DELETE | `/projects/{projectId}/test-suites/{suiteId}` | Rename `{name?, description?, version}`; delete only an **empty custom** suite (otherwise 409), so deleting a suite never loses tests |
 
-### 2.8 Coverage and dashboard — Phase 6
+Tests are not hard-deleted through the API: disable a test to stop it from running; regeneration archives generated tests whose scenario no longer applies.
+
+### 2.8 Coverage ✅ Phase 7
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/projects/{projectId}/coverage` | `?specVersionId=&environmentId=&since=`. Returns metrics (each with numerator, denominator and definition), untested operations, untested documented responses, operations missing negative tests, and per-operation breakdown |
-| GET | `/dashboard` | Cross-project summary for the current user: project count, recent runs, 14-day outcome trend, lowest-coverage projects |
+| GET | `/projects/{projectId}/coverage?environmentId=` | Coverage of the active version: `version`, `metrics` (`{id, group: TEST_DESIGN\|EXECUTION, label, value, total?, definition}`), `outcomes` of distinct enabled tests (`tests, executed, passed, failed, error, inconclusive, skipped, notRun`), one row per operation (tests, duplicates, inactive tests, responses targeted/exercised, constraints, branches, missing negative kinds, undocumented statuses received, outcomes) and `gaps` (`operationsWithoutTests`, `responsesNotExercised[{operationKey, status, targeted}]`, `missingNegatives[{kind, label, operations}]`). `environmentId` limits execution metrics to runs in that environment. No active version → 409 `NO_ACTIVE_SPECIFICATION` |
+| GET | `/projects/{projectId}/coverage/operation?key=&environmentId=` | Drill-down of one operation (`key` = `METHOD /path`): responses with received statuses, negative kinds (`PRESENT`, `MISSING`, `NOT_APPLICABLE`), planned scenarios with covered state and test ids, scenarios the generator skips with the reason, schema branches, enabled tests with `duplicateOf` and latest outcome. Unknown key → 404 |
+| GET | `/projects/{projectId}/coverage/changes?from=` | Changes from `from` (default: the version numbered just below the active one) to the active version: operations `ADDED`/`REMOVED`/`CHANGED` with aspects, tests, tests generated from an earlier version and stale tests; `unchanged` count; `baseline` (latest snapshot of `from`) and `current` summary numbers; `history` (latest 50 snapshots) |
 
-### 2.9 AI — Phase 7
+Metric definitions are part of the response and are documented in ADR-028.
+
+### 2.8a Dashboard and project overview ✅ Phase 9
+
+Read-only summaries counted from stored rows (no estimates, no caching):
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/ai/status` | `{enabled, reachable, model, modelAvailable}` (cached for 30 s) |
-| POST | `/projects/{projectId}/ai/test-suggestions` | `{operationKey, maxSuggestions ≤ 10}`. Returns suggestions stored as `PENDING_REVIEW` tests, plus rejected suggestions with reasons. With AI unavailable → `200 {source: "UNAVAILABLE", suggestions: []}` with a message (deterministic generation is unaffected) |
-| POST | `/projects/{projectId}/executions/{executionId}/explanation` | Returns `{source: "AI" \| "DETERMINISTIC_FALLBACK", summary, hypotheses[], debuggingSteps[], suggestedChange, citations[]}` |
-| GET | `/projects/{projectId}/executions/{executionId}/explanations` | Previous explanations for this execution |
+| GET | `/dashboard` | `{totals: {activeProjects, archivedProjects, runsLast7Days, runsWithFailuresLast7Days, runsInProgress, testsPendingReview, staleTests}, projects: [project summary…], recentRuns: [run…]}`. Test runs only (console requests excluded); pending and stale tests of active projects; the 12 most recently active projects (latest of last update and last run) and the 8 latest runs |
+| GET | `/projects/{projectId}/overview` | `{project: project summary, recentRuns: [run…]}` (8 latest test runs); archived projects included |
+
+Project summary: `{id, name, description, archived, updatedAt, activeSpecification: {id, versionNumber, title, apiVersion, operations} \| null, tests: {active, enabled, pendingReview, stale, suites}, environments, lastRun: run \| null, coverage: {takenAt, operations, operationsWithTests, responses, responsesExercised, executed, passed} \| null}`. `coverage` is the latest stored snapshot of the active version (§2.8), shown with its time, not a recalculation. Run: `{id, projectId, projectName, status, environmentName, total, passed, failed, error, inconclusive, skipped, createdAt, finishedAt}`.
+
+### 2.9 AI ✅ Phase 8
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/ai/status?refresh=` | `{enabled, state: READY\|MODEL_MISSING\|UNAVAILABLE\|DISABLED, model, server, installedModels[], message, latencyMs, checkedAt}`; cached 10 s, `refresh=true` checks now |
+| POST | `/projects/{projectId}/ai/suggestions` | `{operationKey}` → `{operationKey, model, latencyMs, attempts, created: [test detail…], discarded: [{name, reason}], possibleDuplicates: [{name, similarTo, difference}]}`. Created tests are `AI_SUGGESTED`, `PENDING_REVIEW`, not executable; accept/reject with `POST /tests/{id}/review`, edit with `PUT /tests/{id}` |
+| POST | `/projects/{projectId}/runs/{runId}/results/{resultId}/explanation` | Explains a FAILED, ERROR or INCONCLUSIVE result (others → 409): `{id, resultId, model, latencyMs, createdAt, summary, observedFacts: [{statement, source, grounding}], likelyCauses: [{hypothesis, confidence, evidence: [{text, grounding}]}], debuggingSteps[], suggestedChanges: [{target: TEST\|SPECIFICATION\|API_IMPLEMENTATION, change}], inputs[], sourceCodeProvided: false, warnings[]}` |
+| GET | same path | The latest stored explanation, or 404 |
+
+AI errors: `AI_UNAVAILABLE` (503: disabled, not reachable or other Ollama error), `AI_MODEL_NOT_FOUND` (503), `AI_BUSY` (503), `AI_TIMEOUT` (504), `AI_INVALID_OUTPUT` (502), `PAYLOAD_TOO_LARGE` (413, prompt over the limit), `RATE_LIMITED` (429 with `retryAfterSeconds`). Each problem carries `aiFailure` with the classified kind. No other endpoint depends on AI.
 
 ### 2.10 Operational endpoints (Actuator)
 
@@ -212,15 +245,23 @@ Finding shape:
   "testSummary": { "total": 7, "approved": 6, "pendingReview": 1 }
 }
 
-// Test case
+// Test case (GET /tests/{id})
 {
-  "id": "…", "operationKey": "POST /pets", "name": "Missing required field 'name'",
-  "category": "MISSING_FIELD", "origin": "DETERMINISTIC", "reviewStatus": "APPROVED",
-  "lifecycleStatus": "ACTIVE", "riskLevel": "MUTATING",
-  "request": { "pathParams": {}, "query": {}, "headers": {}, "contentType": "application/json",
-               "body": { "tag": "dog" } },
-  "expectations": { "expectedStatuses": ["400", "422"], "statusClassFallback": "4XX", "validateSchema": true },
-  "rationale": "'name' is listed in required[] of the request schema."
+  "id": "…", "suiteId": "…", "operationKey": "POST /products", "method": "POST", "path": "/products",
+  "name": "Missing required field 'name'", "category": "MISSING_FIELD", "origin": "DETERMINISTIC",
+  "reviewStatus": "APPROVED", "lifecycleStatus": "ACTIVE", "riskLevel": "MUTATING",
+  "enabled": true, "userModified": false, "executable": true,
+  "scenarioKey": "body.missing:/name", "specLocation": "#/components/schemas/NewProduct/required",
+  "rationale": "'name' is listed in 'required' of schema NewProduct. The request omits it.",
+  "generatorVersion": "1", "sourceSpecificationVersionId": "…",
+  "request": { "pathParams": {}, "query": {}, "headers": {},
+               "body": { "mode": "JSON", "contentType": "application/json", "value": { "sku": "HJB-7247", "price": 129.99, "category": "tools" } },
+               "auth": "ENVIRONMENT" },                       // ENVIRONMENT | NONE | INVALID
+  "expectations": { "statuses": ["400", "422"],              // exact codes or classes such as "4XX"
+                    "summary": "Rejected with 400 or 422, the documented client-error responses for invalid input. …",
+                    "validateResponseSchema": true,
+                    "responseChecks": [{ "status": "400", "mediaType": "application/json", "schemaName": "Error" }] },
+  "version": 0
 }
 
 // Coverage metric

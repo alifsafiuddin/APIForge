@@ -22,11 +22,12 @@ const DOT_CLASSES: Record<DisplayStatus, string> = {
   CHECKING: 'bg-muted-foreground animate-pulse',
 }
 
-export function HealthBadge({ status }: { status: DisplayStatus }) {
+/** `compact`: on narrow screens only the coloured dot is visible; the label stays available to screen readers. */
+export function HealthBadge({ status, compact = false }: { status: DisplayStatus; compact?: boolean }) {
   return (
-    <Badge variant="outline" className="gap-1.5 font-normal">
+    <Badge variant="outline" className="gap-1.5 font-normal" title={LABELS[status]}>
       <span aria-hidden="true" className={`size-2 rounded-full ${DOT_CLASSES[status]}`} />
-      {LABELS[status]}
+      <span className={compact ? 'sr-only sm:not-sr-only' : undefined}>{LABELS[status]}</span>
     </Badge>
   )
 }

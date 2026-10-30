@@ -11,6 +11,18 @@ spring:
 apiforge:
   cors:
     allowed-origins: ${APIFORGE_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  secrets:
+    # DEVELOPMENT ONLY. This key is public (it is in the repository) and protects nothing; the prod
+    # profile refuses to start with it. Set APIFORGE_SECRETS_KEY to override.
+    key: ${APIFORGE_SECRETS_KEY:ZGV2LW9ubHkta2V5LWRvLW5vdC11c2UtaW4tcHJvZCE=}
+  outbound:
+    # The local sample API (samples/warehouse-lab-server.mjs) is the only trusted destination.
+    trusted-targets-enabled: true
+    trusted-targets:
+      - host: localhost
+        port: 8090
+      - host: 127.0.0.1
+        port: 8090
 
 logging:
   level:

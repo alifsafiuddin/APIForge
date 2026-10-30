@@ -90,7 +90,7 @@ class SchemaIntegrationTest {
         MigrationInfo[] applied = flyway.info().applied();
 
         assertThat(applied).extracting(info -> info.getVersion().getVersion())
-                .containsExactly("1", "2", "3", "4", "5", "6", "7");
+                .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13");
         assertThat(applied).allSatisfy(info -> assertThat(info.getState()).isEqualTo(MigrationState.SUCCESS));
         assertThat(flyway.info().pending()).isEmpty();
     }
@@ -105,11 +105,21 @@ class SchemaIntegrationTest {
     }
 
     @Test
+    void deterministicTestsNeedAScenarioKey() {
+        TestSuite suite = suites.saveAndFlush(new TestSuite(project.getId(), "Generated", null, TestSuite.Kind.GENERATED));
+
+        assertThatThrownBy(() -> testCases.saveAndFlush(new TestCase(project.getId(), suite.getId(), "GET /pets",
+                "No identity", TestCase.Category.HAPPY_PATH, TestCase.Origin.DETERMINISTIC, TestCase.RiskLevel.READ_ONLY,
+                Map.of(), Map.of(), HASH)))
+                .hasMessageContaining("ck_test_cases_scenario_key");
+    }
+
+    @Test
     void entitiesRoundTripIncludingJsonColumnsAndAuditTimestamps() {
         SpecificationVersion spec = specifications.saveAndFlush(specification(project.getId(), 1));
         TestSuite suite = suites.saveAndFlush(new TestSuite(project.getId(), "Generated", null, TestSuite.Kind.GENERATED));
         TestCase testCase = testCases.saveAndFlush(new TestCase(project.getId(), suite.getId(), "GET /pets/{id}",
-                "Get pet", TestCase.Category.HAPPY_PATH, TestCase.Origin.DETERMINISTIC, TestCase.RiskLevel.READ_ONLY,
+                "Get pet", TestCase.Category.HAPPY_PATH, TestCase.Origin.MANUAL, TestCase.RiskLevel.READ_ONLY,
                 Map.of("pathParams", Map.of("id", 7)), Map.of("expectedStatuses", List.of("200")), HASH));
 
         SpecificationVersion reloadedSpec = specifications.findById(spec.getId()).orElseThrow();
@@ -205,6 +215,17 @@ class SchemaIntegrationTest {
                                           outcome, executed_at)
                 values (?, ?, 'GET /x', '{}', '{}', 'PASSED', now())""", UUID.randomUUID(), run.runId()))
                 .hasMessageContaining("ck_test_results_passed_has_response");
+    }
+
+    @Test
+    void timeToHeadersCannotExceedTheDuration() {
+        SeededRun run = history.completedRun(project.getId(), user.getId());
+
+        assertThatThrownBy(() -> jdbc.update("""
+                insert into test_results (id, test_run_id, operation_key, test_case_snapshot, request_snapshot,
+                                          outcome, executed_at, response_status, duration_ms, time_to_headers_ms)
+                values (?, ?, 'GET /x', '{}', '{}', 'FAILED', now(), 500, 10, 11)""", UUID.randomUUID(), run.runId()))
+                .hasMessageContaining("ck_test_results_time_to_headers");
     }
 
     @Test

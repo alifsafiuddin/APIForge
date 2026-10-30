@@ -20,10 +20,10 @@ const problemSchema = z.object({
 
 export type FieldError = { field: string; message: string }
 
-/** Error codes produced on the client side, in addition to the backend's documented codes. */
-export type ClientErrorCode = 'NETWORK_ERROR' | 'INVALID_RESPONSE' | 'HTTP_ERROR'
-
-/** A failed API call, normalised from the backend's problem+json format or a client-side failure. */
+/**
+ * A failed API call, normalised from the backend's problem+json format or a client-side failure
+ * (codes `NETWORK_ERROR`, `INVALID_RESPONSE`, `HTTP_ERROR` in addition to the backend's documented codes).
+ */
 export class ApiError extends Error {
   readonly status: number
   readonly code: string

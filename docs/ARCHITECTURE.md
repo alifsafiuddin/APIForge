@@ -31,7 +31,7 @@ flowchart LR
         api[backend<br/>Spring Boot 4.1 / Java 21]
         db[(PostgreSQL 18)]
         llm[Ollama<br/>local model]
-        demo[demo-target<br/>authorized sample API]
+        demo[Warehouse Lab sample<br/>authorized sample API]
     end
     ext[(Authorized external<br/>test APIs)]
     blocked[[Private / loopback /<br/>link-local / metadata]]
@@ -69,10 +69,11 @@ flowchart TB
     gen[generation<br/>deterministic generators]
     exec[execution<br/>runs, request building, history]
     outbound[outbound<br/>SSRF guard, HTTP client, limits]
-    validation[validation<br/>contract validation, outcome rules]
-    coverage[coverage<br/>metrics]
-    ai[ai<br/>Spring AI gateway, prompts,<br/>output validation, fallback]
-    dashboard[dashboard<br/>read models]
+    validation[validation<br/>contract validation]
+    schema[schema<br/>shared JSON Schema validator]
+    coverage[coverage<br/>specification coverage,<br/>gaps, snapshots]
+    ai[ai<br/>Ollama gateway (Spring AI), prompts,<br/>sanitizing, output validation]
+    dashboard[dashboard<br/>read model: SQL aggregates<br/>for home page and project overview]
     common[common<br/>errors, paging, clock, ids]
 
     web --> auth & project & spec & env & testcase & gen & exec & coverage & ai & dashboard
@@ -81,12 +82,12 @@ flowchart TB
     spec --> project
     env --> project & secrets
     testcase --> spec
-    gen --> spec & testcase
+    gen --> spec & testcase & schema
     exec --> env & testcase & outbound & validation & secrets
-    validation --> spec
-    coverage --> spec & testcase & exec
-    ai --> spec & testcase & exec & secrets
-    dashboard --> project & exec & coverage
+    validation --> schema
+    coverage --> spec & testcase & exec & gen & schema & env
+    ai --> spec & testcase & exec & gen & schema & audit
+    dashboard --> project
 ```
 
 Rules (enforced by ArchUnit from Phase 2, when the first layered modules exist):
@@ -95,7 +96,7 @@ Rules (enforced by ArchUnit from Phase 2, when the first layered modules exist):
 2. Entities never leave the service layer; controllers return DTOs (records).
 3. Only `outbound` may construct HTTP clients for user-supplied destinations.
 4. Only `ai` may depend on Spring AI types.
-5. Only `spec` and `validation` may depend on swagger-parser / openapi-request-validator types.
+5. Only `spec` may depend on swagger-parser types. JSON Schema evaluation for generated requests and for responses lives in `schema` (ADR-027); `validation` adds the HTTP-level contract checks on top.
 6. No cyclic dependencies between modules.
 
 ### 3.2 Layers inside a module
@@ -162,10 +163,10 @@ sequenceDiagram
         O->>O: OutboundGuard: scheme/port/DNS/IP checks,<br/>connect only to validated IPs, size + time limits,<br/>manual redirect revalidation
         O-->>R: response or classified transport error
         R->>V: validate(specVersion, operation, response)
-        V-->>R: findings (status, content type, schema)
+        V-->>R: assertions (documented status, content type,<br/>JSON syntax, body schema with JSON paths)
         R->>E: evaluate(expectations, findings, check states)
         E-->>R: PASSED / FAILED / INCONCLUSIVE / ERROR
-        R->>DB: insert test_execution (redacted snapshot) + validation_finding rows
+        R->>DB: insert test_results row (redacted snapshot, assertions, timing)
     end
     R->>DB: complete test_run with totals
 ```
@@ -221,20 +222,20 @@ React SPA (Vite, TypeScript 6.0, Tailwind CSS 4, shadcn/ui on Radix primitives, 
 | Route | Page | Notes |
 |---|---|---|
 | `/login`, `/register` | Auth ✅ | Registration can be disabled by config; `?next=` is restricted to in-app paths |
-| `/` | Overview dashboard | ✅ recent projects + system status; later recent runs, pass/fail trend, coverage summary |
+| `/` | Overview dashboard ✅ | Totals (active/archived projects, test runs in 7 days and those with failures, tests to review, stale tests), the most recently active projects with specification, tests, environments, last run and stored coverage, recent runs across projects, system status; new-project action (Phase 9) |
 | `/projects` | API projects ✅ | List (search, sort, active/archived, paging), create, edit, archive/restore, delete (typed confirmation) |
-| `/projects/:projectId` | Project overview | Active spec, environments, last run, coverage tile |
+| `/projects/:projectId` | Project overview ✅ | Setup checklist derived from the project's state (spec → tests → environment → run), key numbers linking to their tabs, recent runs, Run tests (Phase 9) |
 | `/projects/:projectId/spec` | Specification explorer ✅ | Version selector (activate older versions), searchable endpoint index grouped by tag with method filters, version overview (servers, security schemes, tags, import findings, original download), import dialog (upload or paste, dry-run check) |
-| `/projects/:projectId/spec/operations/:operationId` | Endpoint detail ✅ | Parameters by location, request body and responses per media type with an expandable schema viewer (references, enums, nullable, required, constraints, recursion), effective security, import warnings; later: tests for this endpoint and ad hoc send |
-| `/projects/:projectId/tests` | Test generation workspace | Generate deterministic tests, AI suggestions review queue, edit tests |
-| `/projects/:projectId/runs` | Execution history | Filterable list of runs |
-| `/projects/:projectId/runs/:runId` | Test execution results + contract validation report | Per-test outcomes, findings grouped by rule/severity |
-| `/projects/:projectId/executions/:executionId` | Execution detail + AI failure assistant | Request/response (redacted), findings, explain panel |
-| `/projects/:projectId/coverage` | Coverage report | Metrics with definitions, untested endpoints/responses, missing negatives |
-| `/projects/:projectId/environments` | Environment configuration | Base URL, auth, variables (secrets write-only), execution policy |
-| `/settings` | Settings | Profile, password, AI status/model info |
+| `/projects/:projectId/spec/operations/:operationId` | Endpoint detail ✅ | Parameters by location, request body and responses per media type with an expandable schema viewer (references, enums, nullable, required, constraints, recursion), effective security, import warnings |
+| `/projects/:projectId/tests` | Test generation workspace ✅ | Generate and regenerate deterministic tests, with a report (created, updated, unchanged, kept edits, archived, skipped with reasons). An endpoint index shows enabled/total counts; each endpoint lists its tests with category, state and suite filters and bulk enable, disable or move. The test panel shows why the test exists, its expected outcome and response checks, the request and its provenance, with enable, move, review and edit. Also a suites dialog and "not generated" reasons per endpoint, AI suggestions per endpoint, and a project-wide test finder (name search; views All, Needs review, AI-suggested, Stale, Disabled; paging; kept in the URL) |
+| `/projects/:projectId/runs` | Execution history ✅ | Runs and console requests, newest first, with outcome counts; filters by kind, status and result kept in the URL; paging; refreshes while a run is active |
+| `/projects/:projectId/runs/:runId` | Run results ✅ | Live progress, cancel, per-test outcomes; outcome filters, result panel with contract assertions (path, expected, actual), body inspector with findings marked, timing, redacted request and response, correlation id, AI explanation; comparison with an earlier run |
+| `/projects/:projectId/console` | Console ✅ | One request through the same guarded engine (method, path, query, headers, body, auth mode, expected statuses) |
+| `/projects/:projectId/coverage` | Coverage report | ✅ Metrics with definitions (test design and execution separate), gaps, operation table with filters and drill-down, version changes and history |
+| `/projects/:projectId/environments` | Environment configuration ✅ | Base URL, timeout, redirects, execution policy (confirmation above read-only), auth, default headers, variables (secrets write-only); authorization notice on first creation |
+| `/settings` | Settings ✅ | Profile (display name), password change (ends other sessions), sign-out, account deletion with typed e-mail and password (Phase 9). AI status stays in the header chip |
 
-Layout: left sidebar (global: Overview, Projects, Settings; project-scoped section when inside a project), top bar with project switcher and user menu; collapses to a drawer below the `md` breakpoint.
+Layout: left sidebar (Workspace: Overview, Projects; Account: Settings), project sections as tabs inside a project, top bar with AI and backend status and the user menu; the sidebar becomes a drawer below the `lg` breakpoint, where the header shows only the logo and status dots. A banner explains when the browser is offline or the backend does not answer (Phase 9). Irreversible actions (deleting a project, environment, variable or the account, cancelling a run) ask for confirmation in a dialog; deleting a project or the account requires typing its name or e-mail.
 
 ### 6.2 Frontend structure
 
@@ -257,23 +258,24 @@ Untrusted content (response bodies, spec descriptions, AI text) is always render
 ```
 /
 ├── README.md
-├── docker-compose.yml           # postgres, ollama, backend, frontend, demo-target
+├── docker-compose.yml           # the stack: postgres, backend, frontend; profiles ai, tls, demo (DEPLOYMENT.md §2)
 ├── .env.example                 # documented variables, no real secrets
-├── .github/workflows/ci.yml
+├── .github/                     # workflows: ci, dependencies, release; dependabot
+├── deploy/caddy/Caddyfile       # HTTPS for the tls profile
 ├── docs/                        # this documentation
 ├── backend/                     # Maven (wrapper), Spring Boot app
-│   ├── pom.xml, mvnw, mvnw.cmd
+│   ├── pom.xml, mvnw, mvnw.cmd, Dockerfile
 │   └── src/{main,test}/...
 │       main/java/com/apiforge/{auth,audit,project,spec,environment,secrets,testcase,
 │                               generation,execution,outbound,validation,coverage,
 │                               ai,dashboard,common,config}
 │       main/resources/db/migration/V*__*.sql
 ├── frontend/                    # Vite React app
-│   ├── package.json, package-lock.json
-│   ├── Dockerfile, nginx.conf
+│   ├── package.json, package-lock.json, Dockerfile, nginx/ (template, security headers)
 │   └── src/...
-├── demo-target/                 # small Spring Boot API + its openapi.yaml (authorized test target)
-└── e2e/                         # Playwright tests against the compose stack
+├── samples/                     # sample OpenAPI documents and the Warehouse Lab API (authorized test target)
+├── evaluation/ai/               # AI evaluation dataset, runner and results
+└── e2e/                         # Playwright end-to-end tests against the running stack
 ```
 
 ## 8. Cross-cutting concerns
@@ -281,6 +283,6 @@ Untrusted content (response bodies, spec descriptions, AI text) is always render
 - **Configuration**: `@ConfigurationProperties` records under the `apiforge.*` prefix, validated at startup with `@Validated`. Profiles: `dev`, `test`, `prod`. Secrets only via environment variables.
 - **Logging**: Spring Boot native structured logging (`logging.structured.format.console=ecs`) in `prod`, human-readable in `dev`. A request-id MDC filter is applied. Log messages never include header values, bodies, or variable values (enforced by the redaction module and tests).
 - **Errors**: RFC 9457 `application/problem+json` via `ProblemDetail`, with a stable `code` and optional `errors[]`. Stack traces are never returned.
-- **Health**: Actuator `health` (liveness/readiness groups) and `info` are exposed. Ollama has its own health indicator but is **excluded from readiness**, so an AI outage does not mark the app down.
+- **Health**: Actuator `health` (liveness/readiness groups) and `info` are exposed; readiness covers the application state and the database only. AI availability is reported by `GET /api/v1/ai/status`, not by Actuator, so an AI outage never marks the app down.
 - **Concurrency**: virtual threads enabled. Run execution uses a bounded executor with per-user concurrency caps.
 - **Time & IDs**: UUIDv7-style random UUIDs generated in the app, `timestamptz` everywhere, and an injectable `Clock` for tests.

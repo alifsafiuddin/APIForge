@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Suitable for a single backend instance (see docs/DECISIONS.md ADR-014); a shared store would
  * be needed for horizontal scaling.
  */
-public class FixedWindowRateLimiter {
+public final class FixedWindowRateLimiter {
 
     /** Upper bound on tracked keys so that a flood of distinct keys cannot exhaust memory. */
     static final int MAX_TRACKED_KEYS = 50_000;

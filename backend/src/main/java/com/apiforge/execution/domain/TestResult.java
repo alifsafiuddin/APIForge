@@ -33,12 +33,13 @@ public class TestResult {
 
     public enum ErrorKind {
         TIMEOUT, CONNECT_FAILED, DNS_FAILURE, TLS_ERROR, BLOCKED_BY_POLICY, RESPONSE_TOO_LARGE,
-        INVALID_RESPONSE, REDIRECT_BLOCKED, VARIABLE_UNRESOLVED, INTERNAL
+        INVALID_RESPONSE, REDIRECT_BLOCKED, VARIABLE_UNRESOLVED, CANCELLED, INTERNAL
     }
 
     /** Response data of an execution that received an HTTP response. */
+    /** @param timeToHeadersMs until the response headers arrived, or {@code null} when unknown */
     public record ResponseData(int status, Map<String, Object> headers, String body, long sizeBytes,
-            boolean truncated, String contentType) {
+            boolean truncated, String contentType, Integer timeToHeadersMs) {
     }
 
     @Id
@@ -84,6 +85,9 @@ public class TestResult {
     @Column(name = "duration_ms")
     private Integer durationMs;
 
+    @Column(name = "time_to_headers_ms")
+    private Integer timeToHeadersMs;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "outcome", nullable = false, length = 20)
     private Outcome outcome;
@@ -101,6 +105,9 @@ public class TestResult {
 
     @Column(name = "executed_at", nullable = false)
     private Instant executedAt;
+
+    @Column(name = "correlation_id", length = 64)
+    private String correlationId;
 
     protected TestResult() {
     }
@@ -134,6 +141,7 @@ public class TestResult {
         result.responseSizeBytes = response.sizeBytes();
         result.responseTruncated = response.truncated();
         result.responseContentType = response.contentType();
+        result.timeToHeadersMs = response.timeToHeadersMs();
         return result;
     }
 
@@ -146,6 +154,25 @@ public class TestResult {
         result.errorKind = errorKind;
         result.errorMessage = errorMessage;
         return result;
+    }
+
+    /** A test that was not executed (policy, cancellation); {@code reason} says why. */
+    public static TestResult skipped(UUID testRunId, UUID testCaseId, String operationKey,
+            Map<String, Object> testCaseSnapshot, Map<String, Object> requestSnapshot, String reason, Instant executedAt) {
+        TestResult result = new TestResult(testRunId, testCaseId, operationKey, testCaseSnapshot, requestSnapshot,
+                Outcome.SKIPPED, List.of(), null, executedAt);
+        result.errorMessage = reason;
+        return result;
+    }
+
+    /** Sets the id sent to the target as the correlation header (before the result is stored). */
+    public TestResult correlatedWith(String id) {
+        this.correlationId = id;
+        return this;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
     }
 
     public UUID getId() {
@@ -198,6 +225,10 @@ public class TestResult {
 
     public Integer getDurationMs() {
         return durationMs;
+    }
+
+    public Integer getTimeToHeadersMs() {
+        return timeToHeadersMs;
     }
 
     public Outcome getOutcome() {

@@ -50,12 +50,30 @@ public final class BrowserClient {
         return send(withJson(HttpRequest.newBuilder(uri(path)), "POST", body), true);
     }
 
+    public Response put(String path, Object body) {
+        return send(withJson(HttpRequest.newBuilder(uri(path)), "PUT", body), true);
+    }
+
     public Response patch(String path, Object body) {
         return send(withJson(HttpRequest.newBuilder(uri(path)), "PATCH", body), true);
     }
 
     public Response delete(String path) {
         return send(HttpRequest.newBuilder(uri(path)).DELETE(), true);
+    }
+
+    public Response delete(String path, Object body) {
+        return send(withJson(HttpRequest.newBuilder(uri(path)), "DELETE", body), true);
+    }
+
+    /** Any method with a raw body and content type (null for none), e.g. to test media-type handling. */
+    public Response raw(String method, String path, String contentType, String body) {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(uri(path)).method(method,
+                body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
+        if (contentType != null) {
+            builder.header("Content-Type", contentType);
+        }
+        return send(builder, !"GET".equals(method));
     }
 
     /** A multipart/form-data upload of one file, as a browser form would send it. */

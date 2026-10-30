@@ -1,0 +1,83 @@
+# Rendered at container start from /etc/nginx/templates (envsubst of APIFORGE_* variables and the
+# resolvers the image reads from /etc/resolv.conf).
+server_tokens off;
+
+# The backend's address is looked up per request (cached 10 s), not once at start: a redeployed or
+# recreated backend container gets a new IP, which a startup-time lookup would never notice (502s).
+resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
+
+# Forwarding headers decide the client address the backend uses for rate limits and the audit log.
+# Clients must not choose it: unless this nginx is reachable only through a trusted proxy (Caddy in
+# the tls profile, a load balancer) — APIFORGE_PROXY_TRUSTED=true — incoming X-Forwarded-* headers
+# are replaced by what nginx itself sees.
+map "${APIFORGE_PROXY_TRUSTED}" $apiforge_forwarded_for {
+    "true"  $proxy_add_x_forwarded_for;
+    default $remote_addr;
+}
+map "${APIFORGE_PROXY_TRUSTED}:$http_x_forwarded_proto" $apiforge_forwarded_proto {
+    "~^true:(?<proto>https?)$" $proto;
+    default $scheme;
+}
+
+server {
+    listen 8080;
+    root /usr/share/nginx/html;
+
+    # Specification uploads are limited to 5 MB by the backend, which answers larger ones with a
+    # problem+json 413; nginx only stops bodies far beyond that.
+    client_max_body_size 8m;
+
+    include /etc/nginx/snippets/security-headers.conf;
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location /api/ {
+        # A variable makes nginx resolve the name at request time; the request URI is passed unchanged.
+        set $apiforge_backend ${APIFORGE_BACKEND_URL};
+        proxy_pass $apiforge_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $apiforge_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $apiforge_forwarded_proto;
+        proxy_set_header X-Forwarded-Host $host;
+        # AI calls may take up to twice the model timeout (one retry after invalid output): this must
+        # exceed 2 × APIFORGE_AI_REQUEST_TIMEOUT (default 120 s), or the browser gets a 504 first.
+        proxy_read_timeout ${APIFORGE_PROXY_READ_TIMEOUT};
+        proxy_send_timeout 60s;
+    }
+
+    # Only the aggregated health status is public (used by the UI's status badge and uptime checks).
+    location = /actuator/health {
+        set $apiforge_backend ${APIFORGE_BACKEND_URL};
+        proxy_pass $apiforge_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $apiforge_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $apiforge_forwarded_proto;
+    }
+
+    # Every other management endpoint stays internal.
+    location = /actuator {
+        return 404;
+    }
+    location /actuator/ {
+        return 404;
+    }
+
+    # Hashed build assets never change.
+    location /assets/ {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        try_files $uri =404;
+    }
+
+    # Client-side routes: always serve the current index.html.
+    location / {
+        include /etc/nginx/snippets/security-headers.conf;
+        add_header Cache-Control "no-cache" always;
+        try_files $uri /index.html;
+    }
+}

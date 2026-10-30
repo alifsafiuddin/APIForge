@@ -49,4 +49,26 @@ public final class AuthDtos {
             return new UserResponse(user.id(), user.email(), user.displayName());
         }
     }
+
+    public record ProfileRequest(
+            @NotBlank @Size(max = 100) @Pattern(regexp = NO_CONTROL_CHARACTERS,
+                    message = "must not contain control characters") String displayName) {
+    }
+
+    public record PasswordChangeRequest(@NotNull @Size(max = 256) String currentPassword,
+            @NotNull @Size(max = 256) String newPassword) {
+
+        @Override
+        public String toString() {
+            return "PasswordChangeRequest[currentPassword=***, newPassword=***]";
+        }
+    }
+
+    public record DeleteAccountRequest(@NotNull @Size(max = 256) String password, @NotBlank @Size(max = 254) String confirmEmail) {
+
+        @Override
+        public String toString() {
+            return "DeleteAccountRequest[password=***, confirmEmail=" + confirmEmail + "]";
+        }
+    }
 }

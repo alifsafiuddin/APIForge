@@ -7,6 +7,12 @@ spring:
     username: ${APIFORGE_DB_USER}
     password: ${APIFORGE_DB_PASSWORD}
 
+server:
+  # Runs behind a reverse proxy (nginx in the frontend image, plus a TLS terminator). X-Forwarded-For
+  # and X-Forwarded-Proto are honoured only from private-network proxies (Tomcat's default internal
+  # proxies), so rate limits see the real client address and redirects and cookies see HTTPS.
+  forward-headers-strategy: ${APIFORGE_FORWARD_HEADERS_STRATEGY:native}
+
 apiforge:
   auth:
     # Production is served over HTTPS: cookies must not travel over plain HTTP.

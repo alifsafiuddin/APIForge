@@ -1,4 +1,4 @@
-import { LogOut } from 'lucide-react'
+import { LogOut, Settings } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
 
@@ -49,6 +49,10 @@ export function UserMenu() {
           <p className="truncate text-xs font-normal text-muted-foreground">{user.data.email}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => void navigate('/settings')}>
+          <Settings aria-hidden="true" />
+          Settings
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void signOut()} disabled={logout.isPending}>
           <LogOut aria-hidden="true" />
           Sign out

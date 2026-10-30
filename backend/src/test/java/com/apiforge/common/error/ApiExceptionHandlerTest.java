@@ -34,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.apiforge.config.ClockConfig;
 import com.apiforge.config.SecurityConfig;
+import com.apiforge.support.SliceCredentialEpochs;
 
 /**
  * Verifies the documented problem+json format for each class of error, using a controller
@@ -41,7 +42,7 @@ import com.apiforge.config.SecurityConfig;
  */
 @WebMvcTest(controllers = ApiExceptionHandlerTest.ProbeController.class)
 @Import({ ApiExceptionHandlerTest.ProbeController.class, SecurityConfig.class, ProblemResponseWriter.class,
-        ClockConfig.class })
+        ClockConfig.class, SliceCredentialEpochs.class })
 @WithMockUser
 class ApiExceptionHandlerTest {
 

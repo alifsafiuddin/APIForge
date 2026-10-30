@@ -1,6 +1,7 @@
 package com.apiforge.common.error;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -32,17 +33,20 @@ public class ProblemResponseWriter {
         ProblemDetail problem = Problems.create(code.status(), code, detail, request);
         Map<String, Object> body = new LinkedHashMap<>();
         // Like Spring MVC, omit "type" when it is the default (RFC 9457: absent means "about:blank").
-        if (problem.getType() != null) {
-            body.put("type", problem.getType().toString());
+        URI type = problem.getType();
+        if (type != null) {
+            body.put("type", type.toString());
         }
         body.put("title", problem.getTitle());
         body.put("status", problem.getStatus());
         body.put("detail", problem.getDetail());
-        if (problem.getInstance() != null) {
-            body.put("instance", problem.getInstance().toString());
+        URI instance = problem.getInstance();
+        if (instance != null) {
+            body.put("instance", instance.toString());
         }
-        if (problem.getProperties() != null) {
-            body.putAll(problem.getProperties());
+        Map<String, Object> properties = problem.getProperties();
+        if (properties != null) {
+            body.putAll(properties);
         }
         response.setStatus(code.status().value());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);

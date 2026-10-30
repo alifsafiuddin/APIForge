@@ -56,6 +56,21 @@ public class EnvironmentVariable extends AuditableEntity {
         return new EnvironmentVariable(environmentId, name, true, null, ciphertext, keyId);
     }
 
+    public void setPlain(String value) {
+        this.secret = false;
+        this.plainValue = value;
+        this.encryptedValue = null;
+        this.keyId = null;
+    }
+
+    /** @param ciphertext output of the secrets cipher; never the plaintext value */
+    public void setSecret(byte[] ciphertext, String newKeyId) {
+        this.secret = true;
+        this.plainValue = null;
+        this.encryptedValue = ciphertext.clone();
+        this.keyId = newKeyId;
+    }
+
     public UUID getEnvironmentId() {
         return environmentId;
     }

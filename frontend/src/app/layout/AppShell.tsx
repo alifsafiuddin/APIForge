@@ -5,18 +5,21 @@ import { Link, Outlet } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { UserMenu } from '@/features/auth/UserMenu'
+import { AiStatusBadge } from '@/features/ai/AiStatusBadge'
 import { useBackendHealth, useSystemInfo } from '@/features/system/api'
 import { HealthBadge } from '@/features/system/HealthBadge'
 
+import { ConnectionBanner } from './ConnectionBanner'
 import { SidebarNav } from './SidebarNav'
 
-function Brand() {
+/** Logo and name; `compact` shows only the logo on narrow screens (the name stays available to screen readers). */
+function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <Link to="/" className="flex items-center gap-2 rounded-md px-1 font-semibold tracking-tight">
+    <Link to="/" className="flex shrink-0 items-center gap-2 rounded-md px-1 font-semibold tracking-tight whitespace-nowrap">
       <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
         <Workflow className="size-4" aria-hidden="true" />
       </span>
-      APIForge AI
+      <span className={compact ? 'sr-only sm:not-sr-only' : undefined}>APIForge AI</span>
     </Link>
   )
 }
@@ -27,7 +30,7 @@ function BackendStatus() {
   return (
     <div className="flex items-center gap-2 text-sm" aria-live="polite">
       <span className="hidden text-muted-foreground sm:inline">Backend</span>
-      <HealthBadge status={status} />
+      <HealthBadge status={status} compact />
     </div>
   )
 }
@@ -89,13 +92,15 @@ export function AppShell() {
             </SheetContent>
           </Sheet>
           <div className="lg:hidden">
-            <Brand />
+            <Brand compact />
           </div>
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-3">
+            <AiStatusBadge />
             <BackendStatus />
             <UserMenu />
           </div>
         </header>
+        <ConnectionBanner />
 
         <main id="main-content" className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
           <Outlet />

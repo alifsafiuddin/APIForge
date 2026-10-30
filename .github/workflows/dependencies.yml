@@ -1,0 +1,62 @@
+name: Dependency vulnerabilities and secrets
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Mondays 06:00 UTC: new advisories appear without any change in this repository.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  osv-scanner:
+    name: OSV-Scanner (backend SBOM, frontend and e2e lockfiles)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OSV_SCANNER_VERSION: v2.6.0
+      OSV_SCANNER_SHA256: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Backend SBOM (runtime dependencies, CycloneDX)
+        working-directory: backend
+        run: >-
+          ./mvnw -B -ntp -q org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeBom
+          -DincludeTestScope=false -DincludeProvidedScope=false -DoutputFormat=json -DoutputName=bom
+          && cp target/bom.json ../backend.cdx.json
+      - name: Install OSV-Scanner (checksum verified)
+        run: |
+          curl -fsSLo osv-scanner "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SCANNER_SHA256}  osv-scanner" | sha256sum -c -
+          chmod +x osv-scanner
+      - name: Scan
+        run: ./osv-scanner scan source -L backend.cdx.json -L frontend/package-lock.json -L e2e/package-lock.json
+
+  gitleaks:
+    name: Secrets in the git history (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks (checksum verified)
+        run: |
+          curl -fsSLo gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+      # .gitleaksignore lists the reviewed, intentional non-secrets (test and development-only values).
+      - name: Scan every commit
+        run: ./gitleaks git . --redact --no-banner

@@ -20,7 +20,7 @@ describe('Specification import', () => {
   it('starts with an empty state and imports pasted text into a browsable explorer', async () => {
     const state = mockSpecApi({ versions: 0 })
     const user = userEvent.setup()
-    renderApp(`/projects/${PROJECT.id}`)
+    renderApp(`/projects/${PROJECT.id}/spec`)
 
     expect(await screen.findByRole('heading', { name: 'No specification yet' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Import specification' }))

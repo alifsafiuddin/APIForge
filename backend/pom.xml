@@ -22,9 +22,37 @@
         <maven-enforcer-plugin.version>3.6.3</maven-enforcer-plugin.version>
         <archunit.version>1.5.1</archunit.version>
         <swagger-parser.version>2.1.48</swagger-parser.version>
+        <rgxgen.version>3.1</rgxgen.version>
+        <spring-ai.version>2.0.1</spring-ai.version>
+        <!-- Security patches over Spring Boot 4.1.1's managed versions (Phase 10 OSV scan; see docs/QA_REPORT.md).
+             Remove when a Boot release manages these or newer. -->
+        <!-- GHSA-9xv2-5v5q-p794, GHSA-gcx9-497g-6cp6, GHSA-h3x4-894j-xpx5: fixed in 11.0.25 -->
+        <tomcat.version>11.0.27</tomcat.version>
+        <!-- GHSA-7hhh-6rmp-j9qf, GHSA-p6pp-m3f8-5c89, GHSA-cxp5-3px4-pw24, GHSA-gx83-3vf8-gh7j, GHSA-q4xh-88c3-wmh7,
+             GHSA-wjgm-6hv5-3cvf, GHSA-wv8q-qhhj-9h54: fixed in 3.1.7 / 2.21.7 -->
+        <jackson-bom.version>3.1.7</jackson-bom.version>
+        <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
         <!-- Keep in sync with docker-compose.yml -->
         <postgres.image>postgres:18.6-alpine</postgres.image>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Spring AI's template engine brings 4.13.1, Hibernate and Spring Data 4.13.2 (patch level, same API). -->
+            <dependency>
+                <groupId>org.antlr</groupId>
+                <artifactId>antlr4-runtime</artifactId>
+                <version>4.13.2</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>
@@ -66,6 +94,24 @@
             <artifactId>swagger-parser-v3</artifactId>
             <version>${swagger-parser.version}</version>
         </dependency>
+        <!-- The only HTTP client for user-supplied destinations; confined to the outbound package (ADR-026). -->
+        <dependency>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
+        </dependency>
+        <!-- Generates strings matching a schema "pattern" for test data (no runtime dependencies; ADR-025). -->
+        <dependency>
+            <groupId>com.github.curious-odd-man</groupId>
+            <artifactId>rgxgen</artifactId>
+            <version>${rgxgen.version}</version>
+        </dependency>
+
+        <!-- Local LLM through Ollama (optional at runtime; confined to the ai package, ADR-029). The plain
+             module, not the starter: the client, timeouts and retries are configured explicitly. -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-ollama</artifactId>
+        </dependency>
 
         <!-- Test -->
         <dependency>
@@ -75,27 +121,7 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-flyway-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-validation-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -245,6 +271,44 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                    </execution>
+                    <!-- The coverage gates documented in docs/TESTING.md section 5; verify fails below them. -->
+                    <execution>
+                        <id>check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.80</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                                <rule>
+                                    <element>PACKAGE</element>
+                                    <includes>
+                                        <include>com.apiforge.outbound</include>
+                                        <include>com.apiforge.validation</include>
+                                        <include>com.apiforge.secrets</include>
+                                        <include>com.apiforge.generation*</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.90</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
