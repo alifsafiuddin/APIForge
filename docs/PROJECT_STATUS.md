@@ -21,6 +21,10 @@ Also added: `CLAUDE.md` (rules for AI coding agents, from the verified conventio
 
 Verification (executed 2026-10-29, Windows 11, Docker Desktop 29.9.1): `./mvnw -B clean verify` before the changes — 868 tests, BUILD SUCCESS, 94.0% / 80.1%; after — **875 tests, 0 failures, "All coverage checks have been met", BUILD SUCCESS**, 94.0% line / 80.1% branch; outbound security tests 175/175. Frontend `npm run check` 125/125, `npm run build` OK, `npm audit --omit=dev` 0 vulnerabilities. OSV-Scanner 2.6.0 on a fresh SBOM (132 components) and both lockfiles: no issues. gitleaks on the changed files: no leaks. Not re-run (no workflow or UI change): end-to-end suite, demo, stack checks (last passed 2026-10-23). GitHub Actions results could not be read from here (private repository, no `gh`).
 
+**CI failure fixed (2026-10-30).** GitHub reported the `stack` job (*Images, complete stack and end-to-end tests*) failing. Reproduced locally exactly as the workflow runs it (export of commit `8298863`, images tagged `ci`, the workflow's `.env` with `APIFORGE_AI_ENABLED=false`, `--no-build`, the same health checks, `npm ci`, typecheck, the full suite): the stack started and the health, management-endpoint and migration checks passed; the end-to-end suite had **10 passed, 1 skipped, 1 failed** — the no-AI journey expected the header to read "AI: … Disabled", but the UI labels AI switched off by configuration as "AI: Off". Local runs had only covered "no AI" with Ollama stopped (*Unavailable*), so the assertion had been wrong since Phase 10 and the job had failed since Phase 11 added it. The test now expects *Off*; re-run against the same stack: **11 passed, 1 skipped** (the AI-available journey). The `backend` job, which the `stack` job waits for, passed on GitHub, so the new coverage gate holds in CI too. Remaining difference from CI: the local run used Microsoft Edge instead of Playwright's bundled Chromium.
+
+**ADR-031** records the decision that verdicts are deterministic and the model only assists, with the rejected model-driven alternative and where it is enforced.
+
 ## Phase 12 summary — release
 
 ### Delivered

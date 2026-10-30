@@ -41,7 +41,8 @@ test('without local AI, AI actions explain why and everything else still works',
   const status = (await api<AiStatus>(page, 'GET', '/api/v1/ai/status?refresh=true')).json
   test.skip(status.state === 'READY', 'local AI is available')
 
-  await expect(page.getByRole('button', { name: /^AI: (Unavailable|Model missing|Disabled)/ })).toBeVisible()
+  // "Off" is how the header labels AI switched off by configuration (APIFORGE_AI_ENABLED=false, as in CI).
+  await expect(page.getByRole('button', { name: /^AI: (Unavailable|Model missing|Off)/ })).toBeVisible()
   const projectId = await createProject(page, unique('No AI'))
   await importSpecification(page, projectId)
   const generated = await generateTests(page, projectId)

@@ -58,7 +58,7 @@
 | Frontend | CI and local | `npm run lint`, `npm run typecheck`, `npm run test:coverage`, `npm run build` |
 | Dependencies | CI: `npm audit --omit=dev --audit-level=high`, `dependencies.yml` (OSV-Scanner over the backend SBOM and the lockfiles, also weekly), Dependabot | No known vulnerabilities |
 | Static analysis | QA pass: SpotBugs (max effort, medium threshold), knip | Findings fixed or justified in QA_REPORT.md |
-| End-to-end | CI (`stack` job: the images, the complete Compose stack from a clean environment, AI disabled) and locally (dev servers or the Compose stack, once with Ollama and once without) | `cd e2e && npx playwright test`; against Compose: `E2E_BASE_URL=http://localhost:8080 E2E_LAB_URL=http://warehouse-lab:8090` |
+| End-to-end | CI (`stack` job: the images, the complete Compose stack from a clean environment, AI disabled) and locally (dev servers or the Compose stack, once with Ollama and once without). Locally "without" was tested with Ollama stopped (*Unavailable*), never with AI switched off (*Off*), which is how CI runs — that gap hid a failing assertion in CI until 2026-10-30 | `cd e2e && npx playwright test`; against Compose: `E2E_BASE_URL=http://localhost:8080 E2E_LAB_URL=http://warehouse-lab:8090` |
 | Stack | CI and locally | Images build; services healthy; migrations applied; only the aggregated health exposed; no published backend or database port beyond loopback |
 | Warnings | Everywhere | Fixed, not suppressed |
 

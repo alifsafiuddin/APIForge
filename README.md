@@ -226,6 +226,8 @@ AI is optional. To use it:
 | Proposing additional test scenarios | Model — validated against a strict schema, deduplicated, stored as *needs review*, not runnable until a person accepts it |
 | Explaining a failed assertion | Model — facts it cites are checked against the recorded data; hypotheses are labelled; proposed changes are never applied |
 
+Why the model never judges a test, and the alternative that was rejected: [ADR-031](docs/DECISIONS.md#adr-031-deterministic-verdicts-the-model-assists-and-never-judges).
+
 Never expose Ollama's port to the internet: it has no authentication. What the model sees, how answers are validated, and hardware guidance: [docs/AI.md](docs/AI.md); measured quality and latency of both models: [docs/AI_EVALUATION.md](docs/AI_EVALUATION.md).
 
 ## API
