@@ -23,7 +23,7 @@
         <archunit.version>1.5.1</archunit.version>
         <swagger-parser.version>2.1.48</swagger-parser.version>
         <rgxgen.version>3.1</rgxgen.version>
-        <spring-ai.version>2.0.1</spring-ai.version>
+        <spring-ai.version>2.0.2</spring-ai.version>
         <!-- Security patches over Spring Boot 4.1.1's managed versions (Phase 10 OSV scan; see docs/QA_REPORT.md).
              Remove when a Boot release manages these or newer. -->
         <!-- GHSA-9xv2-5v5q-p794, GHSA-gcx9-497g-6cp6, GHSA-h3x4-894j-xpx5: fixed in 11.0.25 -->
