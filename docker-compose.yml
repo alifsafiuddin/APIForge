@@ -150,7 +150,7 @@ services:
     tmpfs:
       - /tmp
     profiles: ["tls"]
-    image: caddy:2.11.7-alpine
+    image: caddy:2.11.9-alpine
     restart: unless-stopped
     depends_on:
       frontend:
