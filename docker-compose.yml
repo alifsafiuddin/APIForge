@@ -24,7 +24,7 @@ services:
   postgres:
     logging: *logging
     # Keep in sync with <postgres.image> in backend/pom.xml (used by Testcontainers).
-    image: postgres:18.6-alpine
+    image: postgres:18.7-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${APIFORGE_DB_NAME:-apiforge}
